@@ -13,158 +13,106 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4.2.2
-    
+
     - name: Set swap to 10G
       uses: pierotofy/set-swap-space@master
       with:
         swap-size-gb: 10
-    
+
     - name: Setup build kernel environment
       run: |
         sudo apt-get update
-        sudo apt-get install git ccache automake flex lzop bison gperf build-essential zip curl zlib1g-dev g++-multilib bzip2 libbz2-dev liblz4-tool make squashfs-tools dpkg-dev libssl-dev python3 bc libc6-dev-i386 libncurses5-dev libtinfo6
+        sudo apt-get install git ccache automake flex lzop bison gperf build-essential zip curl zlib1g-dev g++-multilib bzip2 libbz2-dev liblz4-tool make squashfs-tools dpkg-dev libssl-dev python3 bc libc6-dev-i386 libncurses5-dev libtinfo6 libtinfo5
         mkdir -p $GITHUB_WORKSPACE/kernel_workspace
-    
-    - name: Download Toolchains (Evasión de Recortes Activa)
-      run: |
-        cd $GITHUB_WORKSPACE/kernel_workspace
-        
-        # Cadenas cifradas en Base64 para proteger las URLs de las Toolchains
-        CLANG_B64="aHR0cHM6Ly9naXRodWIuY29tL2tkcmFnMG4vcHJvdG9uLWNsYW5nLmdpdA=="
-        GCC64_B64="aHR0cHM6Ly9naXRodWIuY29tL0xpbmVhZ2VPUy9hbmRyb2lkX3ByZWJ1aWx0c19nY2NfbGludXgteDg2X2FhcmNoNjRfYWFyY2g2NC1saW51eC1hbmRyb2lkLTQuOS5naXQ="
-        GCC32_B64="aHR0cHM6Ly9naXRodWIuY29tL0xpbmVhZ2VPUy9hbmRyb2lkX3ByZWJ1aWx0c19nY2NfbGludXgteDg2X2FybV9hcm0tbGludXgtYW5kcm9pZGVhYmktNC45LmdpdA=="
-        
-        # Decodificación directa y limpia en memoria
-        URL_CLANG=$(echo "$CLANG_B64" | base64 --decode)
-        URL_GCC64=$(echo "$GCC64_B64" | base64 --decode)
-        URL_GCC32=$(echo "$GCC32_B64" | base64 --decode)
-        
-        # Clonación limpia de herramientas
-        git clone "$URL_CLANG" --depth=1 clang-aosp
-        git clone "$URL_GCC64" --depth=1 gcc-64
-        git clone "$URL_GCC32" --depth=1 gcc-32
 
-        # Inyección preventiva: Enlace simbólico para mitigar la ausencia de libtinfo5 en Ubuntu 24.04
-        mkdir -p $GITHUB_WORKSPACE/kernel_workspace/lib_compat
-        ln -s /usr/lib/x86_64-linux-gnu/libtinfo.so.6 $GITHUB_WORKSPACE/kernel_workspace/lib_compat/libtinfo.so.5
-    
-    - name: Download kernel source (Ruta Protegida)
+    - name: Download Official Android Toolchains
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
         
-        # Cadena cifrada para la URL oficial del Kernel de Miatoll Android 16
-        KERNEL_B64="aHR0cHM6Ly9naXRodWIuY29tL2NyZHJvaWRhbmRyb2lkL2FuZHJvaWRfa2VybmVsX3hpYW9taV9zbTYyNTAuZ2l0"
-        URL_KERNEL=$(echo "$KERNEL_B64" | base64 --decode)
+        # Clonamos el Clang oficial de Google AOSP (Evita el error de CLANG_TRIPLE de Proton)
+        git clone https://googlesource.com --depth=1 -b master clang-aosp
         
-        # Clonación del código fuente
-        git clone --recursive "$URL_KERNEL" -b 16.0 android-kernel --depth=1
-        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel/scripts
+        # Clonamos los GCC oficiales de LineageOS para enlazado secundario
+        git clone https://github.com --depth=1 gcc-64
+        git clone https://github.com --depth=1 gcc-32
+
+    - name: Download kernel source
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace
+        # Clonación limpia de crDroid rama 16.0 para Miatoll
+        git clone https://github.com -b 16.0 android-kernel --depth=1
+        cd android-kernel/scripts
         sed -i 's/ -dirty//g' setlocalversion
 
-    - name: Setup KernelSU Manual e Infalible
+    - name: Setup Official KernelSU (Estructura Limpia)
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-        
-        # Limpieza absoluta de rutas antiguas para evitar colisiones
-        rm -rf KernelSU KernelSU-Next drivers/kernelsu drivers/kernelsu-next
-        
-        # URL COMPLETA Y VERIFICADA: Clonamos el repositorio oficial de KernelSU sin recortes
-        git clone https://github.com drivers/kernelsu --depth=1
-        
-        # Inyectamos la directiva de compilación eliminando duplicados mediante un chequeo rápido
-        sed -i '/kernelsu/d' drivers/Makefile
-        echo "obj-y += kernelsu/" >> drivers/Makefile
-        
-        # Guardamos la versión numérica en las variables globales del entorno de GitHub
-        KSU_VERSION=$(cd drivers/kernelsu && expr $(/usr/bin/git rev-list --count HEAD) + 10200)
-        echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
+        # Inyección oficial de KernelSU mediante su script nativo de sincronización
+        curl -LSs "https://githubusercontent.com" | bash -s main
 
-    - name: Inject NetHunter and KernelSU Patches
+    - name: Inject NetHunter Patches into Defconfig
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-        # Saneamos el defconfig eliminando duplicados de NetHunter/KSU previos
-        sed -i '/CONFIG_SYSVIPC/d' arch/arm64/configs/miatoll_defconfig
-        sed -i '/CONFIG_MODULES/d' arch/arm64/configs/miatoll_defconfig
-        sed -i '/CONFIG_WIRELESS/d' arch/arm64/configs/miatoll_defconfig
-        sed -i '/CONFIG_KERNELSU/d' arch/arm64/configs/miatoll_defconfig
-        
-        # Inyección de parches NetHunter
-        echo "CONFIG_SYSVIPC=y" >> arch/arm64/configs/miatoll_defconfig
-        echo "CONFIG_SYSVIPC_SYSCTL=y" >> arch/arm64/configs/miatoll_defconfig
-        echo "CONFIG_MODULES=y" >> arch/arm64/configs/miatoll_defconfig
-        echo "CONFIG_MODULE_UNLOAD=y" >> arch/arm64/configs/miatoll_defconfig
-        echo "CONFIG_WIRELESS=y" >> arch/arm64/configs/miatoll_defconfig
-        echo "CONFIG_CFG80211=m" >> arch/arm64/configs/miatoll_defconfig
-        echo "CONFIG_MAC80211=m" >> arch/arm64/configs/miatoll_defconfig
-        echo "CONFIG_CFG80211_WEXT=y" >> arch/arm64/configs/miatoll_defconfig
-        echo "CONFIG_ATH_CARDS=m" >> arch/arm64/configs/miatoll_defconfig
-        echo "CONFIG_ATH9K_HTC=m" >> arch/arm64/configs/miatoll_defconfig
-        echo "CONFIG_RTL8187=m" >> arch/arm64/configs/miatoll_defconfig
-        echo "CONFIG_RT2X00=m" >> arch/arm64/configs/miatoll_defconfig
-        echo "CONFIG_RT2800USB=m" >> arch/arm64/configs/miatoll_defconfig
-        echo "CONFIG_USB_G_ANDROID=y" >> arch/arm64/configs/miatoll_defconfig
-        echo "CONFIG_USB_F_HID=y" >> arch/arm64/configs/miatoll_defconfig
-        echo "CONFIG_USB_CONFIGFS_F_HID=y" >> arch/arm64/configs/miatoll_defconfig
-        echo "CONFIG_NAMESPACES=y" >> arch/arm64/configs/miatoll_defconfig
-        echo "CONFIG_USER_NS=y" >> arch/arm64/configs/miatoll_defconfig
-        echo "CONFIG_PID_NS=y" >> arch/arm64/configs/miatoll_defconfig
-        echo "CONFIG_NET_NS=y" >> arch/arm64/configs/miatoll_defconfig
-        echo "CONFIG_BLK_DEV_LOOP=y" >> arch/arm64/configs/miatoll_defconfig
-        
-        # Disparador KernelSU Manual
-        echo "CONFIG_KERNELSU=y" >> arch/arm64/configs/miatoll_defconfig
+        # Forzamos la habilitación de los módulos de inyección de paquetes de NetHunter en el archivo base
+        DEFCONFIG="arch/arm64/configs/miatoll_defconfig"
+        echo "CONFIG_SYSVIPC=y" >> $DEFCONFIG
+        echo "CONFIG_SYSVIPC_SYSCTL=y" >> $CONFIG
+        echo "CONFIG_MODULES=y" >> $DEFCONFIG
+        echo "CONFIG_MODULE_UNLOAD=y" >> $DEFCONFIG
+        echo "CONFIG_WIRELESS=y" >> $DEFCONFIG
+        echo "CONFIG_CFG80211=m" >> $DEFCONFIG
+        echo "CONFIG_MAC80211=m" >> $DEFCONFIG
+        echo "CONFIG_CFG80211_WEXT=y" >> $DEFCONFIG
+        echo "CONFIG_ATH_CARDS=m" >> $DEFCONFIG
+        echo "CONFIG_ATH9K_HTC=m" >> $DEFCONFIG
+        echo "CONFIG_RTL8187=m" >> $DEFCONFIG
+        echo "CONFIG_RT2X00=m" >> $DEFCONFIG
+        echo "CONFIG_RT2800USB=m" >> $DEFCONFIG
+        echo "CONFIG_USB_G_ANDROID=y" >> $DEFCONFIG
+        echo "CONFIG_USB_F_HID=y" >> $DEFCONFIG
+        echo "CONFIG_USB_CONFIGFS_F_HID=y" >> $DEFCONFIG
+        echo "CONFIG_NAMESPACES=y" >> $DEFCONFIG
+        echo "CONFIG_USER_NS=y" >> $DEFCONFIG
+        echo "CONFIG_PID_NS=y" >> $DEFCONFIG
+        echo "CONFIG_NET_NS=y" >> $DEFCONFIG
+        echo "CONFIG_BLK_DEV_LOOP=y" >> $DEFCONFIG
 
     - name: Build Miatoll kernel
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         
-        # Parches estructurales directos en el código fuente para saltar advertencias antiguas de Qualcomm
-        sed -i 's/compat_uptr_t/unsigned int/g' include/linux/filter.h
-        sed -i 's/#error "Unsupported NR_CPUS for lb tracepoint."/\/\/ Parcheado por Actions/g' include/trace/events/sched.h
+        # Buscamos dinámicamente la carpeta binaria ejecutable de Clang dentro del pack de Google
+        CLANG_BIN_PATH=$(find $GITHUB_WORKSPACE/kernel_workspace/clang-aosp -name "clang" -type f -path "*/bin/*" | head -n 1 | sed 's/\/clang//')
         
-        # Parche preventivo contra la validación del CLANG_TRIPLE
-        find . -type f -name "Makefile*" -exec sed -i 's/$(error "Clang with Android --target detected.*/# Bypass Clang/g' {} +
-        find . -type f -name "*.mk" -exec sed -i 's/$(error "Clang with Android --target detected.*/# Bypass Clang/g' {} +
-        
-        CLANG_DIR="$GITHUB_WORKSPACE/kernel_workspace/clang-aosp"
-        
-        # 1. Variables de entorno obligatorias para el compilador cruzado
+        # 1. Configuración estricta de arquitecturas cruzadas (SUBARCH=arm habilita compat_uptr_t nativo)
         export ARCH=arm64
-        export SUBARCH=arm64
-        export LD_LIBRARY_PATH=$GITHUB_WORKSPACE/kernel_workspace/lib_compat:$LD_LIBRARY_PATH
-        export PATH=$GITHUB_WORKSPACE/gcc-64/bin:$GITHUB_WORKSPACE/gcc-32/bin:$PATH
+        export SUBARCH=arm
         
-        # 2. Metadatos
+        # 2. Registramos las rutas de las tres toolchains en el PATH global ordenadamente
+        export PATH="$CLANG_BIN_PATH:$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-32/bin:$PATH"
+        
+        # 3. Datos informativos de compilación
         export KBUILD_BUILD_HOST=Github-Action
         export KBUILD_BUILD_USER=$(echo ${{ github.actor }} | tr A-Z a-z)
-        export HOSTCC=gcc
-        export HOSTCXX=g++
         
-        # 3. Argumentos explícitos para Proton Clang
+        # 4. Parámetros de construcción cruzada estándar de Android AOSP
         CC_ARGS="
-          CC=$CLANG_DIR/bin/clang \
-          LD=$CLANG_DIR/bin/ld.lld \
-          AR=$CLANG_DIR/bin/llvm-ar \
-          NM=$CLANG_DIR/bin/llvm-nm \
-          OBJCOPY=$CLANG_DIR/bin/llvm-objcopy \
-          OBJDUMP=$CLANG_DIR/bin/llvm-objdump \
-          STRIP=$CLANG_DIR/bin/llvm-strip \
-          LLVM_IAS=1 \
-          CLANG_TRIPLE=aarch64-linux-android- \
-          CROSS_COMPILE=aarch64-linux-gnu- \
-          CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+          ARCH=arm64 \
+          CC=clang \
+          CLANG_TRIPLE=aarch64-linux-gnu- \
+          CROSS_COMPILE=aarch64-linux-android- \
+          CROSS_COMPILE_ARM32=arm-linux-androideabi- \
+          LD=ld.lld \
+          AR=llvm-ar \
+          NM=llvm-nm \
+          OBJCOPY=llvm-objcopy \
+          OBJDUMP=llvm-objdump \
+          STRIP=llvm-strip
         "
         
-        # 4. Generación del defconfig
-        make O=out ARCH=arm64 $CC_ARGS miatoll_defconfig
-        
-        # Limpieza secundaria interna en out/
-        if [ -d "out" ]; then
-            find out/ -type f -name "Makefile*" -exec sed -i 's/$(error "Clang with Android --target detected.*/# Bypass Clang/g' {} +
-        fi
-        
-        # 5. Compilación del núcleo definitiva
-        make -j$(nproc --all) O=out ARCH=arm64 $CC_ARGS
+        # 5. Ejecución secuencial limpia
+        make O=out $CC_ARGS miatoll_defconfig
+        make -j$(nproc --all) O=out $CC_ARGS
 
     - name: Check and Locate Kernel Output Files
       run: |
@@ -192,19 +140,12 @@ jobs:
       if: env.CHECK_IMAGE == 'true'
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
+        git clone https://github.com --depth=1 AnyKernel3
         
-        # Cadena cifrada para evitar recortes en la descarga de AnyKernel3
-        AK3_B64="aHR0cHM6Ly9naXRodWIuY29tL0phY29hRnVyL0FueUtlcm5lbDMtRm9yay5naXQ="
-        URL_AK3=$(echo "$AK3_B64" | base64 --decode)
-        
-        git clone "$URL_AK3" --depth=1 AnyKernel3
-        
-        # Copia dinámica e inyección
         cp android-kernel/out/arch/arm64/boot/${{ env.KERNEL_FILE_NAME }} AnyKernel3/${{ env.KERNEL_FILE_NAME }}
         sed -i "s/kernel.string=.*/kernel.string=Miatoll Hacking Kernel por ${{ github.actor }}/g" AnyKernel3/anykernel.sh
         rm -rf AnyKernel3/.git* AnyKernel3/README.md
         
-        # Archivo comprimido definitivo
         cd AnyKernel3
         zip -r9 ../Miatoll-NetHunter-Kernel.zip *
 
