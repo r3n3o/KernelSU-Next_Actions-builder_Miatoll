@@ -1,4 +1,4 @@
-name: Build Miatoll Hacking Kernel V5 (Proton Clang + Ultimate Sandbox)
+name: Build Miatoll Hacking Kernel V6 (Proton Clang Puro)
 on:
   workflow_dispatch:
 env:
@@ -24,7 +24,6 @@ jobs:
 
     - name: Setup build kernel environment
       run: |
-        # Agregamos TODAS las librerías sugeridas por el agente (gcc-multilib, libc6-dev-i386, libelf-dev)
         sudo apt-get update
         sudo apt-get install -y git ccache automake flex lzop bison gperf build-essential zip curl zlib1g-dev g++-multilib bzip2 libbz2-dev liblz4-tool make squashfs-tools dpkg-dev libssl-dev python3 libelf-dev bc libc6-dev-i386 gcc-multilib lld llvm
         mkdir -p $GITHUB_WORKSPACE/kernel_workspace
@@ -32,7 +31,7 @@ jobs:
     - name: Download Proton Clang Toolchain
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
-        # Este es el cambio clave: Descartamos AOSP y GCC, usamos solo Proton
+        # LIMPIEZA TOTAL: Solo descargamos Proton Clang. Cero rastro de GCC o AOSP viejo.
         git clone https://github.com/kdrag0n/proton-clang --depth=1
 
     - name: Download kernel source
@@ -77,22 +76,22 @@ jobs:
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         
+        # Agregamos Proton Clang puro al PATH
         export PATH="${GITHUB_WORKSPACE}/kernel_workspace/proton-clang/bin:${PATH}"
         export ARCH=arm64
         export SUBARCH=arm
         export KBUILD_BUILD_HOST=Github-Action
         export KBUILD_BUILD_USER=$(echo ${{ github.actor }} | tr A-Z a-z)
         
-        # --- SOLUCIÓN DEL AGENTE DE GITHUB IMPLEMENTADA ---
-        # Fuerza al compilador a usar sus propias librerías en lugar de las de Ubuntu
+        # Solución extrema para el linker en Ubuntu 24.04
         export LD_LIBRARY_PATH="${GITHUB_WORKSPACE}/kernel_workspace/proton-clang/lib:${LD_LIBRARY_PATH}"
-        export LDFLAGS="-Wl,-dynamic-linker=${GITHUB_WORKSPACE}/kernel_workspace/proton-clang/lib64/ld-linux-x86-64.so.2"
-        export LD="${GITHUB_WORKSPACE}/kernel_workspace/proton-clang/bin/ld"
-        # --------------------------------------------------
         
+        # Las banderas LLVM=1 y LLVM_IAS=1 arreglan el error del ensamblador (-EL) evadiendo /usr/bin/as
         CC_ARGS="
           ARCH=arm64 \
           CC=clang \
+          LLVM=1 \
+          LLVM_IAS=1 \
           CROSS_COMPILE=aarch64-linux-gnu- \
           CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
           LD=${GITHUB_WORKSPACE}/kernel_workspace/proton-clang/bin/ld.lld \
