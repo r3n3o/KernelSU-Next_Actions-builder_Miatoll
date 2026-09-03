@@ -128,7 +128,7 @@ jobs:
         export HOSTCC=gcc
         export HOSTCXX=g++
         
-        # 3. Argumentos explícitos para Proton Clang
+        # 3. Argumentos explícitos para Proton Clang (Forzamos ensamblador integrado LLVM_IAS=1)
         CC_ARGS="
           CC=$CLANG_DIR/bin/clang \
           LD=$CLANG_DIR/bin/ld.lld \
@@ -137,6 +137,7 @@ jobs:
           OBJCOPY=$CLANG_DIR/bin/llvm-objcopy \
           OBJDUMP=$CLANG_DIR/bin/llvm-objdump \
           STRIP=$CLANG_DIR/bin/llvm-strip \
+          LLVM_IAS=1 \
           CLANG_TRIPLE=aarch64-linux-android- \
           CROSS_COMPILE=aarch64-linux-gnu- \
           CROSS_COMPILE_ARM32=arm-linux-gnueabi-
@@ -150,7 +151,7 @@ jobs:
             find out/ -type f -name "Makefile*" -exec sed -i 's/$(error "Clang with Android --target detected.*/# Bypass Clang/g' {} +
         fi
         
-        # 5. LLAMADA DIRECTA: Dejamos correr a Make de forma natural sin desvíos de logs artificiales
+        # 5. Compilación del núcleo estable
         make -j$(nproc --all) O=out ARCH=arm64 $CC_ARGS
 
     - name: Check and Locate Kernel Output Files
