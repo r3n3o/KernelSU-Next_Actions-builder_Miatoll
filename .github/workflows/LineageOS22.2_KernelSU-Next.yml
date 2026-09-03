@@ -28,14 +28,14 @@ jobs:
     - name: Setup build kernel environment
       run: |
         sudo apt-get update
-        sudo apt-get install git ccache automake flex lzop bison gperf build-essential zip curl zlib1g-dev g++-multilib bzip2 libbz2-dev liblz4-tool make squashfs-tools dpkg-dev libssl-dev python3 bc libc6-dev-i386 libncurses5-dev libtinfo6
+        sudo apt-get install git ccache automake flex lzop bison gperf build-essential zip curl zlib1g-dev g++-multilib bzip2 libbz2-dev liblz4-tool make squashfs-tools dpkg-dev libssl-dev python3 bc libc6-dev-i386 libncurses5-dev
         mkdir -p $GITHUB_WORKSPACE/kernel_workspace
 
     - name: Download Official Android Toolchains
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
         
-        # Clonamos el Clang oficial de Google AOSP (Evita el error de CLANG_TRIPLE de Proton)
+        # Clonamos el Clang oficial de Google AOSP con la ruta correcta
         git clone https://googlesource.com --depth=1 -b master clang-aosp
         
         # Clonamos los GCC oficiales de LineageOS para enlazado secundario
@@ -62,7 +62,7 @@ jobs:
         # Forzamos la habilitación de los módulos de inyección de paquetes de NetHunter en el archivo base
         DEFCONFIG="arch/arm64/configs/miatoll_defconfig"
         echo "CONFIG_SYSVIPC=y" >> $DEFCONFIG
-        echo "CONFIG_SYSVIPC_SYSCTL=y" >> $CONFIG
+        echo "CONFIG_SYSVIPC_SYSCTL=y" >> $DEFCONFIG
         echo "CONFIG_MODULES=y" >> $DEFCONFIG
         echo "CONFIG_MODULE_UNLOAD=y" >> $DEFCONFIG
         echo "CONFIG_WIRELESS=y" >> $DEFCONFIG
