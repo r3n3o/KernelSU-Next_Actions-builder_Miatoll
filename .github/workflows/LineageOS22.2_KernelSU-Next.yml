@@ -61,19 +61,25 @@ jobs:
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel/scripts
         sed -i 's/ -dirty//g' setlocalversion
 
-    - name: Setup KernelSU Oficial Estable (Solución a caídas de código)
+    - name: Setup KernelSU Manual e Infalible
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-        rm -rf KernelSU KernelSU-Next
+        rm -rf KernelSU KernelSU-Next drivers/kernelsu
         
-        # Inyección limpia del instalador de KernelSU Oficial Estable compatible con crDroid 4.14
-        curl -LSs "https://githubusercontent.com" | bash -s main
-        KSU_VERSION=$(cd KernelSU && expr $(/usr/bin/git rev-list --count HEAD) + 10200)
+        # 1. Clonamos de forma limpia el código de KernelSU dentro del directorio de drivers
+        git clone https://github.com drivers/kernelsu --depth=1
+        
+        # 2. Inyectamos la directiva de compilación manualmente al final del Makefile de drivers
+        echo "obj-y += kernelsu/" >> drivers/Makefile
+        
+        # 3. Guardamos la versión numérica en las variables globales del entorno de GitHub
+        KSU_VERSION=$(cd drivers/kernelsu && expr $(/usr/bin/git rev-list --count HEAD) + 10200)
         echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
 
-    - name: Inject NetHunter Patches
+    - name: Inject NetHunter and KernelSU Patches
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+        # Parches NetHunter
         echo "CONFIG_SYSVIPC=y" >> arch/arm64/configs/miatoll_defconfig
         echo "CONFIG_SYSVIPC_SYSCTL=y" >> arch/arm64/configs/miatoll_defconfig
         echo "CONFIG_MODULES=y" >> arch/arm64/configs/miatoll_defconfig
@@ -95,6 +101,9 @@ jobs:
         echo "CONFIG_PID_NS=y" >> arch/arm64/configs/miatoll_defconfig
         echo "CONFIG_NET_NS=y" >> arch/arm64/configs/miatoll_defconfig
         echo "CONFIG_BLK_DEV_LOOP=y" >> arch/arm64/configs/miatoll_defconfig
+        
+        # Disparador KernelSU Manual
+        echo "CONFIG_KERNELSU=y" >> arch/arm64/configs/miatoll_defconfig
 
     - name: Build Miatoll kernel
       run: |
