@@ -111,8 +111,8 @@ jobs:
         find . -type f -name "Makefile*" -exec sed -i 's/$(error "Clang with Android --target detected.*/# Bypass Clang/g' {} +
         find . -type f -name "*.mk" -exec sed -i 's/$(error "Clang with Android --target detected.*/# Bypass Clang/g' {} +
         
-        # BYPASS COMPAT_UPTR_T GLOBAL: Forzamos la definición del tipo de dato directamente al final de las cabeceras globales de tipos de Linux
-        echo -e "\n#ifndef compat_uptr_t\ntypedef unsigned int compat_uptr_t;\n#endif" >> include/linux/types.h
+        # PARCHE LOCAL COMPAT_UPTR_T (Macro inofensiva y directa antes del struct sock_fprog_compat)
+        sed -i '/struct sock_fprog_compat/i #define compat_uptr_t unsigned int' include/linux/filter.h
         
         CLANG_DIR="$GITHUB_WORKSPACE/kernel_workspace/clang-aosp"
         
@@ -151,7 +151,7 @@ jobs:
             find out/ -type f -name "Makefile*" -exec sed -i 's/$(error "Clang with Android --target detected.*/# Bypass Clang/g' {} +
         fi
         
-        # 5. Compilación del núcleo estable
+        # 5. Compilación del núcleo definitiva
         make -j$(nproc --all) O=out ARCH=arm64 $CC_ARGS
 
     - name: Check and Locate Kernel Output Files
