@@ -111,8 +111,8 @@ jobs:
         find . -type f -name "Makefile*" -exec sed -i 's/$(error "Clang with Android --target detected.*/# Bypass Clang/g' {} +
         find . -type f -name "*.mk" -exec sed -i 's/$(error "Clang with Android --target detected.*/# Bypass Clang/g' {} +
         
-        # Bypass de tipos de datos en la pila de red
-        sed -i '540i #ifndef compat_uptr_t\ntypedef compat_uint_t compat_uptr_t;\n#endif' include/linux/filter.h
+        # SOLUCIÓN COMPAT_UPTR_T: Inyectamos el archivo de compatibilidad nativo de Linux al inicio
+        sed -i '15i #include <linux/compat.h>' include/linux/filter.h
         
         CLANG_DIR="$GITHUB_WORKSPACE/kernel_workspace/clang-aosp"
         
@@ -128,7 +128,7 @@ jobs:
         export HOSTCC=gcc
         export HOSTCXX=g++
         
-        # 3. Argumentos explícitos para Proton Clang (Forzamos ensamblador integrado LLVM_IAS=1)
+        # 3. Argumentos explícitos para Proton Clang
         CC_ARGS="
           CC=$CLANG_DIR/bin/clang \
           LD=$CLANG_DIR/bin/ld.lld \
