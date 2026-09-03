@@ -1,4 +1,4 @@
-name: Build Miatoll Hacking Kernel
+name: Build Miatoll Hacking Kernel V2
 
 on:
   workflow_dispatch:
@@ -50,7 +50,7 @@ jobs:
         cd android-kernel/scripts
         sed -i 's/ -dirty//g' setlocalversion
 
-    - name: Setup Official KernelSU (Estructura Limpia)
+    - name: Setup Official KernelSU
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         # Inyección oficial de KernelSU mediante su script nativo de sincronización
