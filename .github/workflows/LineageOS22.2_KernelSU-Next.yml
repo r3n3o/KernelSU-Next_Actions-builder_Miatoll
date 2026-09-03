@@ -74,16 +74,17 @@ jobs:
         echo "CONFIG_NET_NS=y" >> $DEFCONFIG
         echo "CONFIG_BLK_DEV_LOOP=y" >> $DEFCONFIG
 
+  
     - name: Build Miatoll kernel
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         
-        # Corrección: Ruta estática a la carpeta bin del compilador AOSP Clang
-        CLANG_DIR="$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin"
+        # Búsqueda dinámica corregida: Sin "-type f" para poder detectar los symlinks de AOSP
+        CLANG_BIN=$(find $GITHUB_WORKSPACE/kernel_workspace/clang-aosp -name "clang" -path "*/bin/*" | head -n 1)
+        CLANG_DIR=$(dirname "$CLANG_BIN")
         
         export ARCH=arm64
         export SUBARCH=arm
-        # Inyectamos CLANG_DIR directamente en el PATH del sistema
         export PATH="${CLANG_DIR}:${GITHUB_WORKSPACE}/kernel_workspace/gcc-64/bin:${GITHUB_WORKSPACE}/kernel_workspace/gcc-32/bin:${PATH}"
         export KBUILD_BUILD_HOST=Github-Action
         export KBUILD_BUILD_USER=$(echo ${{ github.actor }} | tr A-Z a-z)
