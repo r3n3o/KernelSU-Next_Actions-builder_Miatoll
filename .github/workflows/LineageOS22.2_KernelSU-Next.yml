@@ -20,13 +20,13 @@ jobs:
         sudo apt-get update
         sudo apt-get install git ccache automake flex lzop bison gperf build-essential zip curl zlib1g-dev g++-multilib bzip2 libbz2-dev liblz4-tool make squashfs-tools dpkg-dev libssl-dev python3 bc libc6-dev-i386 libncurses5-dev
         mkdir -p $GITHUB_WORKSPACE/kernel_workspace
-        - name: Download Clang and Gcc Toolchains
+        - name: Download Toolchains
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
         git clone https://gitlab.com clang-aosp --depth=1
         git clone https://gitlab.com gcc-64 --depth=1
         git clone https://github.com gcc-32 --depth=1
-        - name: Download kernel source (Miatoll Android 16)
+        - name: Download kernel source
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
         git clone --recursive https://github.com -b 16.0 android-kernel --depth=1
@@ -39,7 +39,7 @@ jobs:
         curl -LSs "https://githubusercontent.com" | bash -s next
         KSU_VERSION=$(cd KernelSU-Next && expr $(/usr/bin/git rev-list --count HEAD) + 10200)
         echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
-    - name: Inject NetHunter & AOSP Aisolation Patches
+    - name: Inject NetHunter Patches
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         echo "CONFIG_SYSVIPC=y" >> arch/arm64/configs/miatoll_defconfig
@@ -76,7 +76,7 @@ jobs:
         DEFCONFIG="miatoll_defconfig"
         make O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD $DEFCONFIG
         make -j$(nproc --all) O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD
-    - name: Check kernel output files for Miatoll Image
+    - name: Check kernel output files
       run: |
        cd $GITHUB_WORKSPACE/kernel_workspace
        if [ -f android-kernel/out/arch/arm64/boot/Image.gz-dtb ]; then
@@ -87,7 +87,7 @@ jobs:
            echo "Kernel output file is empty"
            exit 1
        fi
-    - name: Make AnyKernel3 with Miatoll Image
+    - name: Make AnyKernel3
       if: env.CHECK_IMAGE == 'true'
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
@@ -98,7 +98,7 @@ jobs:
             cp android-kernel/out/arch/arm64/boot/Image AnyKernel3/Image
         fi
         rm -rf AnyKernel3/.git* AnyKernel3/README.md
-    - name: Upload Miatoll AnyKernel3 zip
+    - name: Upload Artifact
       if: env.CHECK_IMAGE == 'true'
       uses: actions/upload-artifact@v4
       with:
