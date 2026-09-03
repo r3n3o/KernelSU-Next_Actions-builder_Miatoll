@@ -5,16 +5,13 @@ on:
 
 env:
   TZ: America/New_York
-  # Variables oficiales para evitar que el runner aborte tareas por desajustes de Node
   ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build:
     name: Build Kernel for Miatoll
     runs-on: ubuntu-24.04
     steps:
-    # Ajuste crítico: v4.2.2 resuelve las caídas de entorno bajo el nuevo estándar de runners de GitHub
     - uses: actions/checkout@v4.2.2
     
     - name: Set swap to 10G
@@ -64,18 +61,14 @@ jobs:
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel/scripts
         sed -i 's/ -dirty//g' setlocalversion
 
-    - name: Setup KernelSU Next (URL Cifrada y Protegida)
+    - name: Setup KernelSU Oficial Estable (Solución a caídas de código)
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-        rm -rf KernelSU-Next
+        rm -rf KernelSU KernelSU-Next
         
-        # Cadena cifrada para evitar la mutilación del script de instalación de KernelSU-Next
-        KSU_SCRIPT_B64="aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL3JpZnN4ZC9LZXJuZWxTVS1OZXh0L25leHQva2VybmVsL3NldHVwLnNo"
-        URL_KSU_SCRIPT=$(echo "$KSU_SCRIPT_B64" | base64 --decode)
-        
-        # Descarga y ejecución limpia del instalador
-        curl -LSs "$URL_KSU_SCRIPT" | bash -s next
-        KSU_VERSION=$(cd KernelSU-Next && expr $(/usr/bin/git rev-list --count HEAD) + 10200)
+        # Inyección limpia del instalador de KernelSU Oficial Estable compatible con crDroid 4.14
+        curl -LSs "https://githubusercontent.com" | bash -s main
+        KSU_VERSION=$(cd KernelSU && expr $(/usr/bin/git rev-list --count HEAD) + 10200)
         echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
 
     - name: Inject NetHunter Patches
@@ -152,7 +145,7 @@ jobs:
             find out/ -type f -name "Makefile*" -exec sed -i 's/$(error "Clang with Android --target detected.*/# Bypass Clang/g' {} +
         fi
         
-        # 5. Compilación del núcleo definitiva (Aislamos la tubería de guardado de logs para evitar falsos cierres de Node)
+        # 5. Compilación del núcleo definitiva
         make -j$(nproc --all) O=out ARCH=arm64 $CC_ARGS
 
     - name: Check and Locate Kernel Output Files
