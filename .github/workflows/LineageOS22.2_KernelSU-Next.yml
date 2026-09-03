@@ -64,22 +64,31 @@ jobs:
     - name: Setup KernelSU Manual e Infalible
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-        rm -rf KernelSU KernelSU-Next drivers/kernelsu
         
-        # 1. Clonamos de forma limpia el código de KernelSU dentro del directorio de drivers
+        # LIMPIEZA ABSOLUTA PREVENTIVA: Borramos cualquier rastro previo para evitar el exit code 128
+        rm -rf KernelSU KernelSU-Next drivers/kernelsu drivers/kernelsu-next
+        
+        # Clonamos de forma limpia el código de KernelSU dentro del directorio de drivers
         git clone https://github.com drivers/kernelsu --depth=1
         
-        # 2. Inyectamos la directiva de compilación manualmente al final del Makefile de drivers
+        # Inyectamos la directiva de compilación eliminando duplicados mediante un chequeo rápido
+        sed -i '/kernelsu/d' drivers/Makefile
         echo "obj-y += kernelsu/" >> drivers/Makefile
         
-        # 3. Guardamos la versión numérica en las variables globales del entorno de GitHub
+        # Guardamos la versión numérica en las variables globales del entorno de GitHub
         KSU_VERSION=$(cd drivers/kernelsu && expr $(/usr/bin/git rev-list --count HEAD) + 10200)
         echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
 
     - name: Inject NetHunter and KernelSU Patches
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-        # Parches NetHunter
+        # Saneamos el defconfig eliminando duplicados de NetHunter/KSU previos
+        sed -i '/CONFIG_SYSVIPC/d' arch/arm64/configs/miatoll_defconfig
+        sed -i '/CONFIG_MODULES/d' arch/arm64/configs/miatoll_defconfig
+        sed -i '/CONFIG_WIRELESS/d' arch/arm64/configs/miatoll_defconfig
+        sed -i '/CONFIG_KERNELSU/d' arch/arm64/configs/miatoll_defconfig
+        
+        # Inyección de parches NetHunter
         echo "CONFIG_SYSVIPC=y" >> arch/arm64/configs/miatoll_defconfig
         echo "CONFIG_SYSVIPC_SYSCTL=y" >> arch/arm64/configs/miatoll_defconfig
         echo "CONFIG_MODULES=y" >> arch/arm64/configs/miatoll_defconfig
