@@ -38,7 +38,6 @@ jobs:
     - name: Download kernel source
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
-        # Clonación limpia del repositorio real de crDroid (Plataforma SM6250 para Miatoll)
         git clone https://github.com/crdroidandroid/android_kernel_xiaomi_sm6250 -b 16.0 android-kernel --depth=1
         cd android-kernel/scripts
         sed -i 's/ -dirty//g' setlocalversion
@@ -74,12 +73,11 @@ jobs:
         echo "CONFIG_NET_NS=y" >> $DEFCONFIG
         echo "CONFIG_BLK_DEV_LOOP=y" >> $DEFCONFIG
 
-  
     - name: Build Miatoll kernel
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         
-        # Búsqueda dinámica corregida: Sin "-type f" para poder detectar los symlinks de AOSP
+        # Búsqueda dinámica para soporte AOSP Clang
         CLANG_BIN=$(find $GITHUB_WORKSPACE/kernel_workspace/clang-aosp -name "clang" -path "*/bin/*" | head -n 1)
         CLANG_DIR=$(dirname "$CLANG_BIN")
         
@@ -102,8 +100,9 @@ jobs:
           OBJDUMP=llvm-objdump \
           STRIP=llvm-strip
         "
-        make O=out $CC_ARGS miatoll_defconfig
-        make -j$(nproc --all) O=out $CC_ARGS
+        # Banderas KCFLAGS inyectadas para forzar el ignorar advertencias desconocidas
+        make O=out $CC_ARGS KCFLAGS="-Wno-unknown-warning-option" miatoll_defconfig
+        make -j$(nproc --all) O=out $CC_ARGS KCFLAGS="-Wno-unknown-warning-option"
 
     - name: Check and Locate Kernel Output Files
       run: |
