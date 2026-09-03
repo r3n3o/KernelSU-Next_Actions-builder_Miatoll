@@ -19,10 +19,15 @@ jobs:
       with:
         swap-size-gb: 10
 
+    - name: Descargar e Instalar libtinfo5 (Compatibilidad Heredada)
+      run: |
+        wget http://ubuntu.com
+        sudo apt-get install -y ./libtinfo5_6.3-2ubuntu0.1_amd64.deb
+
     - name: Setup build kernel environment
       run: |
         sudo apt-get update
-        sudo apt-get install git ccache automake flex lzop bison gperf build-essential zip curl zlib1g-dev g++-multilib bzip2 libbz2-dev liblz4-tool make squashfs-tools dpkg-dev libssl-dev python3 bc libc6-dev-i386 libncurses5-dev libtinfo6 libtinfo5
+        sudo apt-get install git ccache automake flex lzop bison gperf build-essential zip curl zlib1g-dev g++-multilib bzip2 libbz2-dev liblz4-tool make squashfs-tools dpkg-dev libssl-dev python3 bc libc6-dev-i386 libncurses5-dev libtinfo6
         mkdir -p $GITHUB_WORKSPACE/kernel_workspace
 
     - name: Download Official Android Toolchains
