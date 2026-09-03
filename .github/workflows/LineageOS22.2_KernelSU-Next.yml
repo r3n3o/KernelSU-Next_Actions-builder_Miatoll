@@ -107,17 +107,20 @@ jobs:
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         
-        # Reemplazo limpio contra la condicional estricta del CLANG_TRIPLE
+        # Bypass preventivo contra la validación del CLANG_TRIPLE
         find . -type f -name "Makefile*" -exec sed -i 's/$(error "Clang with Android --target detected.*/# Bypass Clang/g' {} +
         find . -type f -name "*.mk" -exec sed -i 's/$(error "Clang with Android --target detected.*/# Bypass Clang/g' {} +
         
+        # BYPASS COMPAT_UPTR_T: Inyectamos el tipo de dato si no se mapeó automáticamente
+        sed -i '540i #ifndef compat_uptr_t\ntypedef compat_uint_t compat_uptr_t;\n#endif' include/linux/filter.h
+        
         CLANG_DIR="$GITHUB_WORKSPACE/kernel_workspace/clang-aosp"
         
-        # 1. Ajuste clave: Volvemos a SUBARCH=arm para mapear las cabeceras de red de 32 bits (Bypass compat_uptr_t)
+        # 1. Variables de entorno obligatorias para el compilador cruzado
         export ARCH=arm64
-        export SUBARCH=arm
+        export SUBARCH=arm64
         export LD_LIBRARY_PATH=$GITHUB_WORKSPACE/kernel_workspace/lib_compat:$LD_LIBRARY_PATH
-        export PATH=$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-32/bin:$PATH
+        export PATH=$GITHUB_WORKSPACE/gcc-64/bin:$GITHUB_WORKSPACE/gcc-32/bin:$PATH
         
         # 2. Metadatos
         export KBUILD_BUILD_HOST=Github-Action
@@ -147,8 +150,14 @@ jobs:
             find out/ -type f -name "Makefile*" -exec sed -i 's/$(error "Clang with Android --target detected.*/# Bypass Clang/g' {} +
         fi
         
-        # 5. Compilación del núcleo
-        make -j$(nproc --all) O=out ARCH=arm64 $CC_ARGS
+        # 5. Compilación del núcleo guardando un registro local para emergencias
+        make -j$(nproc --all) O=out ARCH=arm64 $CC_ARGS 2>&1 | tee build_output.log || {
+            echo "=========================================================="
+            echo "🚨 DETECTOR AUTOMÁTICO DE ERRORES DE COMPILACIÓN EN ROJO 🚨"
+            echo "=========================================================="
+            grep -E "error:" build_output.log | head -n 20
+            exit 2
+        }
 
     - name: Check kernel output files
       run: |
