@@ -1,4 +1,4 @@
-name: Build Miatoll Hacking Kernel V3 (Proton Clang)
+name: Build Miatoll Hacking Kernel V4 (Proton Clang + Sandboxing)
 on:
   workflow_dispatch:
 env:
@@ -24,14 +24,14 @@ jobs:
 
     - name: Setup build kernel environment
       run: |
+        # Agregamos libelf-dev y gcc-multilib sugeridos por el agente
         sudo apt-get update
-        sudo apt-get install -y git ccache automake flex lzop bison gperf build-essential zip curl zlib1g-dev g++-multilib bzip2 libbz2-dev liblz4-tool make squashfs-tools dpkg-dev libssl-dev python3 bc libc6-dev-i386 libncurses5-dev lld llvm
+        sudo apt-get install -y git ccache automake flex lzop bison gperf build-essential zip curl zlib1g-dev g++-multilib bzip2 libbz2-dev liblz4-tool make squashfs-tools dpkg-dev libssl-dev python3 libelf-dev bc libc6-dev-i386 gcc-multilib lld llvm
         mkdir -p $GITHUB_WORKSPACE/kernel_workspace
 
     - name: Download Proton Clang Toolchain
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
-        # Motor especializado para Custom Kernels que reemplaza a AOSP y GCC
         git clone https://github.com/kdrag0n/proton-clang --depth=1
 
     - name: Download kernel source
@@ -76,19 +76,22 @@ jobs:
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         
-        # Enlazamos únicamente Proton Clang, eliminando el conflicto con herramientas viejas
         export PATH="${GITHUB_WORKSPACE}/kernel_workspace/proton-clang/bin:${PATH}"
         export ARCH=arm64
         export SUBARCH=arm
         export KBUILD_BUILD_HOST=Github-Action
         export KBUILD_BUILD_USER=$(echo ${{ github.actor }} | tr A-Z a-z)
         
+        # Aislamos las librerías de Proton Clang para que no use las de Ubuntu 24.04
+        export LD_LIBRARY_PATH="${GITHUB_WORKSPACE}/kernel_workspace/proton-clang/lib:${LD_LIBRARY_PATH}"
+        
+        # Forzamos la ruta absoluta de ld.lld para evadir el enlazador del sistema
         CC_ARGS="
           ARCH=arm64 \
           CC=clang \
           CROSS_COMPILE=aarch64-linux-gnu- \
           CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
-          LD=ld.lld \
+          LD=${GITHUB_WORKSPACE}/kernel_workspace/proton-clang/bin/ld.lld \
           AR=llvm-ar \
           NM=llvm-nm \
           OBJCOPY=llvm-objcopy \
