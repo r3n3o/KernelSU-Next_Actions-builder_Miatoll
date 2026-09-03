@@ -31,7 +31,7 @@ jobs:
     - name: Download Official Android Toolchains
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
-        git clone https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 --depth=1 -b android12-release clang-aosp
+        git clone https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 --depth=1 -b android11-release clang-aosp
         git clone https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 --depth=1 gcc-64
         git clone https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9 --depth=1 gcc-32
 
