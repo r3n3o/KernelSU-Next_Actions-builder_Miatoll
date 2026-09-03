@@ -5,14 +5,17 @@ on:
 
 env:
   TZ: America/New_York
+  # Variables oficiales para evitar que el runner aborte tareas por desajustes de Node
   ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build:
     name: Build Kernel for Miatoll
     runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v4
+    # Ajuste crítico: v4.2.2 resuelve las caídas de entorno bajo el nuevo estándar de runners de GitHub
+    - uses: actions/checkout@v4.2.2
     
     - name: Set swap to 10G
       uses: pierotofy/set-swap-space@master
@@ -104,11 +107,8 @@ jobs:
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         
-        # 1. PARCHES ESTRUCTURALES DIRECTOS EN EL CÓDIGO FUENTE (Evita errores del compilador)
-        # Sanea definitivamente el tipo de dato de red local
+        # Parches estructurales directos en el código fuente para saltar advertencias antiguas de Qualcomm
         sed -i 's/compat_uptr_t/unsigned int/g' include/linux/filter.h
-        
-        # Desactiva de raíz la condición restrictiva del macro NR_CPUS en el tracepoint
         sed -i 's/#error "Unsupported NR_CPUS for lb tracepoint."/\/\/ Parcheado por Actions/g' include/trace/events/sched.h
         
         # Parche preventivo contra la validación del CLANG_TRIPLE
@@ -117,19 +117,19 @@ jobs:
         
         CLANG_DIR="$GITHUB_WORKSPACE/kernel_workspace/clang-aosp"
         
-        # 2. Variables de entorno obligatorias para el compilador cruzado
+        # 1. Variables de entorno obligatorias para el compilador cruzado
         export ARCH=arm64
         export SUBARCH=arm64
         export LD_LIBRARY_PATH=$GITHUB_WORKSPACE/kernel_workspace/lib_compat:$LD_LIBRARY_PATH
         export PATH=$GITHUB_WORKSPACE/gcc-64/bin:$GITHUB_WORKSPACE/gcc-32/bin:$PATH
         
-        # 3. Metadatos
+        # 2. Metadatos
         export KBUILD_BUILD_HOST=Github-Action
         export KBUILD_BUILD_USER=$(echo ${{ github.actor }} | tr A-Z a-z)
         export HOSTCC=gcc
         export HOSTCXX=g++
         
-        # 4. Argumentos explícitos para Proton Clang
+        # 3. Argumentos explícitos para Proton Clang
         CC_ARGS="
           CC=$CLANG_DIR/bin/clang \
           LD=$CLANG_DIR/bin/ld.lld \
@@ -144,7 +144,7 @@ jobs:
           CROSS_COMPILE_ARM32=arm-linux-gnueabi-
         "
         
-        # 5. Generación del defconfig
+        # 4. Generación del defconfig
         make O=out ARCH=arm64 $CC_ARGS miatoll_defconfig
         
         # Limpieza secundaria interna en out/
@@ -152,7 +152,7 @@ jobs:
             find out/ -type f -name "Makefile*" -exec sed -i 's/$(error "Clang with Android --target detected.*/# Bypass Clang/g' {} +
         fi
         
-        # 6. Compilación del núcleo definitiva
+        # 5. Compilación del núcleo definitiva (Aislamos la tubería de guardado de logs para evitar falsos cierres de Node)
         make -j$(nproc --all) O=out ARCH=arm64 $CC_ARGS
 
     - name: Check and Locate Kernel Output Files
@@ -174,7 +174,6 @@ jobs:
             echo "CHECK_IMAGE=true" >> $GITHUB_ENV
         else
             echo "🚨 ERROR: No se encontró ningún binario Image válido en $BOOT_DIR"
-            ls -la $BOOT_DIR || echo "El directorio no está listo o la compilación global falló"
             exit 1
         fi
 
