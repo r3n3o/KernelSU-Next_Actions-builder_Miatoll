@@ -21,7 +21,7 @@ jobs:
     - name: Setup build kernel environment
       run: |
         sudo apt-get update
-        sudo apt-get install git ccache automake flex lzop bison gperf build-essential zip curl zlib1g-dev g++-multilib bzip2 libbz2-dev liblz4-tool make squashfs-tools dpkg-dev libssl-dev python3 bc libc6-dev-i386 libncurses5-dev libtinfo5
+        sudo apt-get install git ccache automake flex lzop bison gperf build-essential zip curl zlib1g-dev g++-multilib bzip2 libbz2-dev liblz4-tool make squashfs-tools dpkg-dev libssl-dev python3 bc libc6-dev-i386 libncurses5-dev libtinfo6
         mkdir -p $GITHUB_WORKSPACE/kernel_workspace
     
     - name: Download Toolchains (Evasión de Recortes Activa)
@@ -34,7 +34,7 @@ jobs:
         GCC32_B64="aHR0cHM6Ly9naXRodWIuY29tL0xpbmVhZ2VPUy9hbmRyb2lkX3ByZWJ1aWx0c19nY2NfbGludXgteDg2X2FybV9hcm0tbGludXgtYW5kcm9pZGVhYmktNC45LmdpdA=="
         
         # Decodificación directa en memoria
-        URL_CLANG=$(echo "$URL_CLANG_B64" | base64 --decode) || URL_CLANG=$(echo "$CLANG_B64" | base64 --decode)
+        URL_CLANG=$(echo "$CLANG_B64" | base64 --decode)
         URL_GCC64=$(echo "$GCC64_B64" | base64 --decode)
         URL_GCC32=$(echo "$GCC32_B64" | base64 --decode)
         
@@ -42,6 +42,10 @@ jobs:
         git clone "$URL_CLANG" --depth=1 clang-aosp
         git clone "$URL_GCC64" --depth=1 gcc-64
         git clone "$URL_GCC32" --depth=1 gcc-32
+
+        # Solución preventiva: Crear un enlace simbólico de libtinfo.so.5 apuntando a la versión 6 dentro del PATH
+        mkdir -p $GITHUB_WORKSPACE/kernel_workspace/lib_compat
+        ln -s /usr/lib/x86_64-linux-gnu/libtinfo.so.6 $GITHUB_WORKSPACE/kernel_workspace/lib_compat/libtinfo.so.5
     
     - name: Download kernel source (Ruta Protegida)
       run: |
@@ -100,6 +104,8 @@ jobs:
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         export ARCH=arm64
         export SUBARCH=arm64
+        # Incluimos nuestra librería de compatibilidad en el LD_LIBRARY_PATH para evitar caídas de GCC
+        export LD_LIBRARY_PATH=$GITHUB_WORKSPACE/kernel_workspace/lib_compat:$LD_LIBRARY_PATH
         export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-32/bin:$PATH
         export KBUILD_BUILD_HOST=Github-Action
         export KBUILD_BUILD_USER=$(echo ${{ github.actor }} | tr A-Z a-z)
