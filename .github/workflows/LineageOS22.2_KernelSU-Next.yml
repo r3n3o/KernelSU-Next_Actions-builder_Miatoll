@@ -1,4 +1,4 @@
-name: Build Miatoll Hacking Kernel V6 (Proton Clang Puro)
+name: Build Miatoll Hacking Kernel V7 (Ubuntu 22.04 + Proton Puro)
 on:
   workflow_dispatch:
 env:
@@ -7,7 +7,8 @@ env:
 jobs:
   build:
     name: Build Kernel for Miatoll
-    runs-on: ubuntu-24.04
+    # LA OPCIÓN 3 DEL AGENTE: Bajamos a Ubuntu 22.04 para compatibilidad nativa perfecta
+    runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v4.2.2
 
@@ -15,12 +16,6 @@ jobs:
       uses: pierotofy/set-swap-space@master
       with:
         swap-size-gb: 10
-
-    - name: Parche de Compatibilidad para libtinfo5
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y libtinfo6
-        sudo ln -sf /lib/x86_64-linux-gnu/libtinfo.so.6 /lib/x86_64-linux-gnu/libtinfo.so.5
 
     - name: Setup build kernel environment
       run: |
@@ -31,7 +26,7 @@ jobs:
     - name: Download Proton Clang Toolchain
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
-        # LIMPIEZA TOTAL: Solo descargamos Proton Clang. Cero rastro de GCC o AOSP viejo.
+        # Única herramienta a descargar. Adiós a AOSP y GCC.
         git clone https://github.com/kdrag0n/proton-clang --depth=1
 
     - name: Download kernel source
@@ -76,17 +71,13 @@ jobs:
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         
-        # Agregamos Proton Clang puro al PATH
         export PATH="${GITHUB_WORKSPACE}/kernel_workspace/proton-clang/bin:${PATH}"
         export ARCH=arm64
         export SUBARCH=arm
         export KBUILD_BUILD_HOST=Github-Action
         export KBUILD_BUILD_USER=$(echo ${{ github.actor }} | tr A-Z a-z)
         
-        # Solución extrema para el linker en Ubuntu 24.04
-        export LD_LIBRARY_PATH="${GITHUB_WORKSPACE}/kernel_workspace/proton-clang/lib:${LD_LIBRARY_PATH}"
-        
-        # Las banderas LLVM=1 y LLVM_IAS=1 arreglan el error del ensamblador (-EL) evadiendo /usr/bin/as
+        # Integración estricta de Proton y banderas LLVM para evitar el error de ensamblador de Ubuntu
         CC_ARGS="
           ARCH=arm64 \
           CC=clang \
