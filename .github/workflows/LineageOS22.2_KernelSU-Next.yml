@@ -24,16 +24,21 @@ jobs:
         sudo apt-get install git ccache automake flex lzop bison gperf build-essential zip curl zlib1g-dev g++-multilib bzip2 libbz2-dev liblz4-tool make squashfs-tools dpkg-dev libssl-dev python3 bc libc6-dev-i386 libncurses5-dev
         mkdir -p $GITHUB_WORKSPACE/kernel_workspace
     
-    - name: Download Toolchains (Variables Protegidas)
+    - name: Download Toolchains (Evasión de Recortes Activa)
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
         
-        # Declaración explícita de URLs completas para evitar recortes del sistema
-        URL_CLANG="https://github.com"
-        URL_GCC64="https://github.com"
-        URL_GCC32="https://github.com"
+        # Cadenas cifradas en Base64 para proteger las URLs originales de cualquier alteración
+        CLANG_B64="aHR0cHM6Ly9naXRodWIuY29tL2tkcmFnMG4vcHJvdG9uLWNsYW5nLmdpdA=="
+        GCC64_B64="aHR0cHM6Ly9naXRodWIuY29tL0xpbmVhZ2VPUy9hbmRyb2lkX3ByZWJ1aWx0c19nY2NfbGludXgteDg2X2FhcmNoNjRfYWFyY2g2NC1saW51eC1hbmRyb2lkLTQuOS5naXQ="
+        GCC32_B64="aHR0cHM6Ly9naXRodWIuY29tL0xpbmVhZ2VPUy9hbmRyb2lkX3ByZWJ1aWx0c19nY2NfbGludXgteDg2X2FybV9hcm0tbGludXgtYW5kcm9pZGVhYmktNC45LmdpdA=="
         
-        # Ejecución de clonación inyectando las variables blindadas
+        # Decodificación directa en la memoria del servidor Linux
+        URL_CLANG=$(echo "$CLANG_B64" | base64 --decode)
+        URL_GCC64=$(echo "$GCC64_B64" | base64 --decode)
+        URL_GCC32=$(echo "$GCC32_B64" | base64 --decode)
+        
+        # Clonación limpia y segura con paths completos e inmutables
         git clone "$URL_CLANG" --depth=1 clang-aosp
         git clone "$URL_GCC64" --depth=1 gcc-64
         git clone "$URL_GCC32" --depth=1 gcc-32
@@ -122,4 +127,3 @@ jobs:
       with:
         name: AK3-Miatoll-NetHunter-KSU
         path: kernel_workspace/AnyKernel3/*
-        
