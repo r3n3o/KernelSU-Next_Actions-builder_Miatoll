@@ -1,4 +1,4 @@
-name: Build Miatoll Hacking Kernel V2
+name: Build Miatoll Hacking Kernel V3 (Proton Clang)
 on:
   workflow_dispatch:
 env:
@@ -28,12 +28,11 @@ jobs:
         sudo apt-get install -y git ccache automake flex lzop bison gperf build-essential zip curl zlib1g-dev g++-multilib bzip2 libbz2-dev liblz4-tool make squashfs-tools dpkg-dev libssl-dev python3 bc libc6-dev-i386 libncurses5-dev lld llvm
         mkdir -p $GITHUB_WORKSPACE/kernel_workspace
 
-    - name: Download Official Android Toolchains
+    - name: Download Proton Clang Toolchain
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
-        git clone https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 --depth=1 -b android11-release clang-aosp
-        git clone https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 --depth=1 gcc-64
-        git clone https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9 --depth=1 gcc-32
+        # Motor especializado para Custom Kernels que reemplaza a AOSP y GCC
+        git clone https://github.com/kdrag0n/proton-clang --depth=1
 
     - name: Download kernel source
       run: |
@@ -77,14 +76,13 @@ jobs:
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         
-        # Enlazamos la ruta estática y limpia de Proton Clang al sistema
+        # Enlazamos únicamente Proton Clang, eliminando el conflicto con herramientas viejas
         export PATH="${GITHUB_WORKSPACE}/kernel_workspace/proton-clang/bin:${PATH}"
         export ARCH=arm64
         export SUBARCH=arm
         export KBUILD_BUILD_HOST=Github-Action
         export KBUILD_BUILD_USER=$(echo ${{ github.actor }} | tr A-Z a-z)
         
-        # Argumentos nativos apuntando a los binarios integrados en Proton
         CC_ARGS="
           ARCH=arm64 \
           CC=clang \
