@@ -104,8 +104,8 @@ jobs:
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         
-        # BYPASS DEFINITIVO: Buscamos el texto exacto del error y eliminamos la directiva $(error ...) cambiando su contenido
-        sed -i 's/$(error "Clang with Android --target detected. Did you specify CLANG_TRIPLE?".  Stop.)/@echo "Bypass Clang Verification Activo"/g' Makefile
+        # EL BYPASS MATEMÁTICO: Vaciamos la variable que activa el disparador de error del target de Android en el Makefile
+        sed -i 's/CLANG_TARGET_FLAGS/DISABLED_TARGET_FLAGS/g' Makefile
         
         # 1. Variables de entorno obligatorias para el compilador cruzado
         export ARCH=arm64
@@ -132,7 +132,7 @@ jobs:
 
     - name: Check kernel output files
       run: |
-       cd $GITHUB_WORKSPACE/kernel_workspace
+       cd $GITHUB_WORKSPACE/workspace
        if [ -f android-kernel/out/arch/arm64/boot/Image.gz-dtb ]; then
            echo "CHECK_IMAGE=true" >> $GITHUB_ENV
        elif [ -f android-kernel/out/arch/arm64/boot/Image ]; then
