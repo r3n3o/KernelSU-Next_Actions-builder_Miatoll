@@ -111,8 +111,8 @@ jobs:
         find . -type f -name "Makefile*" -exec sed -i 's/$(error "Clang with Android --target detected.*/# Bypass Clang/g' {} +
         find . -type f -name "*.mk" -exec sed -i 's/$(error "Clang with Android --target detected.*/# Bypass Clang/g' {} +
         
-        # SOLUCIÓN COMPAT_UPTR_T: Inyectamos el archivo de compatibilidad nativo de Linux al inicio
-        sed -i '15i #include <linux/compat.h>' include/linux/filter.h
+        # BYPASS COMPAT_UPTR_T GLOBAL: Forzamos la definición del tipo de dato directamente al final de las cabeceras globales de tipos de Linux
+        echo -e "\n#ifndef compat_uptr_t\ntypedef unsigned int compat_uptr_t;\n#endif" >> include/linux/types.h
         
         CLANG_DIR="$GITHUB_WORKSPACE/kernel_workspace/clang-aosp"
         
