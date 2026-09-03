@@ -104,42 +104,23 @@ jobs:
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         
-        # 1. Definición estricta de variables de arquitectura
+        # 1. Variables de entorno obligatorias para el compilador cruzado
         export ARCH=arm64
         export SUBARCH=arm64
-        
-        # 2. Entorno de compatibilidad para evitar caídas de librerías antiguas
         export LD_LIBRARY_PATH=$GITHUB_WORKSPACE/kernel_workspace/lib_compat:$LD_LIBRARY_PATH
-        
-        # 3. Agregamos las carpetas bin de las toolchains al PATH global ordenadamente
         export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-32/bin:$PATH
         
-        # 4. Metadatos de la compilación
+        # 2. Metadatos de la compilación
         export KBUILD_BUILD_HOST=Github-Action
         export KBUILD_BUILD_USER=$(echo ${{ github.actor }} | tr A-Z a-z)
         
-        # 5. Forzar al compilador del Host a usar las utilidades del sistema de Ubuntu 24.04
+        # 3. Forzar al compilador del Host a usar las herramientas del sistema nativo
         export HOSTCC=gcc
         export HOSTCXX=g++
         
-        # 6. Agrupamos los argumentos obligatorios del comando Make para inyectarlos EN la llamada
-        BUILD_ARGS="
-          ARCH=arm64 \
-          CC=clang \
-          LD=ld.lld \
-          AR=llvm-ar \
-          NM=llvm-nm \
-          OBJCOPY=llvm-objcopy \
-          OBJDUMP=llvm-objdump \
-          STRIP=llvm-strip \
-          CLANG_TRIPLE=aarch64-linux-android- \
-          CROSS_COMPILE=aarch64-linux-android- \
-          CROSS_COMPILE_ARM32=arm-linux-androideabi-
-        "
-        
-        # 7. Ejecución con los argumentos incrustados directamente para anular la detección automática de GCC antiguo
-        make O=out $BUILD_ARGS miatoll_defconfig
-        make -j$(nproc --all) O=out $BUILD_ARGS
+        # 4. Solución definitiva: Llamada limpia con las variables en una sola línea continua sin saltos ocultos
+        make O=out ARCH=arm64 CC=clang LD=ld.lld AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip CLANG_TRIPLE=aarch64-linux-android- CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_ARM32=arm-linux-androideabi- miatoll_defconfig
+        make -j$(nproc --all) O=out ARCH=arm64 CC=clang LD=ld.lld AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip CLANG_TRIPLE=aarch64-linux-android- CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_ARM32=arm-linux-androideabi-
 
     - name: Check kernel output files
       run: |
