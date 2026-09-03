@@ -1,14 +1,11 @@
-name: Build LineageOS 22.2 Joan/L-01K Kernel with KernelSU-Next
-
+name: Build LineageOS 22.2 Miatoll Kernel with NetHunter & KernelSU-Next
 on:
   workflow_dispatch:
-
 env:
   TZ: America/New_York
-
 jobs:
   build:
-    name: Build Kernel by ${{ github.actor }}
+    name: Build Kernel for Miatoll by ${{ github.actor }}
     runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4
@@ -25,25 +22,21 @@ jobs:
         sudo apt-get update
         sudo apt-get install git ccache automake flex lzop bison gperf build-essential zip curl zlib1g-dev g++-multilib bzip2 libbz2-dev liblz4-tool make squashfs-tools dpkg-dev libssl-dev python3 bc libc6-dev-i386 libncurses5-dev
         mkdir -p $GITHUB_WORKSPACE/kernel_workspace
-    
-    - name: Download Clang from aosp
+        - name: Download Clang from aosp
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
-        git clone https://gitlab.com/crdroidandroid/android_prebuilts_clang_host_linux-x86_clang-r487747c clang-aosp
-    
-    - name: Download Gcc from aosp
+        git clone https://gitlab.com/crdroidandroid/android_prebuilts_clang_host_linux-x86_clang-r487747c clang-aosp --depth=1
+        - name: Download Gcc from aosp
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
-          git clone https://gitlab.com/crdroidandroid/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 gcc-64
-          git clone https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9 gcc-32
-    
-    - name: Download kernel source
+        git clone https://gitlab.com/crdroidandroid/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 gcc-64 --depth=1
+        git clone https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9 gcc-32 --depth=1
+        - name: Download kernel source (Miatoll Android 16)
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
-        git clone --recursive https://github.com/JacoaFur/android_kernel_lge_msm8998.git -b lineage-22.2 android-kernel --depth=1
+        git clone --recursive https://github.com -b 16.0 android-kernel --depth=1
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel/scripts
         sed -i 's/ -dirty//g' setlocalversion
-
     - name: Setup KernelSU Next
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
@@ -51,8 +44,35 @@ jobs:
         curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
         KSU_VERSION=$(cd KernelSU-Next && expr $(/usr/bin/git rev-list --count HEAD) + 10200)
         echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
-
-    - name: Build Joan kernel with KernelSU Next
+    - name: Inject NetHunter & AOSP Aisolation Patches
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+        # 1. CORE KALI (EVITA CUELGUES DE METASPLOIT/POSTGRESQL)
+        echo "CONFIG_SYSVIPC=y" >> arch/arm64/configs/miatoll_defconfig
+        echo "CONFIG_SYSVIPC_SYSCTL=y" >> arch/arm64/configs/miatoll_defconfig
+        echo "CONFIG_MODULES=y" >> arch/arm64/configs/miatoll_defconfig
+        echo "CONFIG_MODULE_UNLOAD=y" >> arch/arm64/configs/miatoll_defconfig
+        # 2. WI-FI MODO MONITOR E INYECCIÓN (ALFA / REALTEK / MEDIATEK)
+        echo "CONFIG_WIRELESS=y" >> arch/arm64/configs/miatoll_defconfig
+        echo "CONFIG_CFG80211=m" >> arch/arm64/configs/miatoll_defconfig
+        echo "CONFIG_MAC80211=m" >> arch/arm64/configs/miatoll_defconfig
+        echo "CONFIG_CFG80211_WEXT=y" >> arch/arm64/configs/miatoll_defconfig
+        echo "CONFIG_ATH_CARDS=m" >> arch/arm64/configs/miatoll_defconfig
+        echo "CONFIG_ATH9K_HTC=m" >> arch/arm64/configs/miatoll_defconfig
+        echo "CONFIG_RTL8187=m" >> arch/arm64/configs/miatoll_defconfig
+        echo "CONFIG_RT2X00=m" >> arch/arm64/configs/miatoll_defconfig
+        echo "CONFIG_RT2800USB=m" >> arch/arm64/configs/miatoll_defconfig
+        # 3. PERIFÉRICOS HID (ATAQUES BADUSB / TECLADO FALSO)
+        echo "CONFIG_USB_G_ANDROID=y" >> arch/arm64/configs/miatoll_defconfig
+        echo "CONFIG_USB_F_HID=y" >> arch/arm64/configs/miatoll_defconfig
+        echo "CONFIG_USB_CONFIGFS_F_HID=y" >> arch/arm64/configs/miatoll_defconfig
+        # 4. PRIVACIDAD Y CONTENEDORES (ESTILO GRAPHENE EN ANDROID 16)
+        echo "CONFIG_NAMESPACES=y" >> arch/arm64/configs/miatoll_defconfig
+        echo "CONFIG_USER_NS=y" >> arch/arm64/configs/miatoll_defconfig
+        echo "CONFIG_PID_NS=y" >> arch/arm64/configs/miatoll_defconfig
+        echo "CONFIG_NET_NS=y" >> arch/arm64/configs/miatoll_defconfig
+        echo "CONFIG_BLK_DEV_LOOP=y" >> arch/arm64/configs/miatoll_defconfig
+    - name: Build Miatoll kernel
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         export ARCH=arm64
@@ -62,85 +82,34 @@ jobs:
         export KBUILD_BUILD_USER=$(echo ${{ github.actor }} | tr A-Z a-z)
         BA_CMD="CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_ARM32=arm-linux-androideabi-"
         EX_CMD="LD=ld.lld LLVM=1 LLVM_IAS=1"
-        DEFCONFIG="lineageos_joan_defconfig"
+        DEFCONFIG="miatoll_defconfig"
         make O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD $DEFCONFIG
         make -j$(nproc --all) O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD
-
-    - name: Check kernel output files for Joan Image
+    - name: Check kernel output files for Miatoll Image
       run: |
        cd $GITHUB_WORKSPACE/kernel_workspace
-       if [ -f android-kernel/out/arch/arm64/boot/Image ]; then
+       if [ -f android-kernel/out/arch/arm64/boot/Image.gz-dtb ]; then
+           echo "CHECK_IMAGE=true" >> $GITHUB_ENV
+       elif [ -f android-kernel/out/arch/arm64/boot/Image ]; then
            echo "CHECK_IMAGE=true" >> $GITHUB_ENV
        else
            echo "Kernel output file is empty"
            exit 1
        fi
-
-    - name: Make AnyKernel3 with Joan Image
+    - name: Make AnyKernel3 with Miatoll Image
       if: env.CHECK_IMAGE == 'true'
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
         git clone https://github.com/JacoaFur/AnyKernel3-Fork --depth=1 AnyKernel3
-        cp android-kernel/out/arch/arm64/boot/Image AnyKernel3/
+        if [ -f android-kernel/out/arch/arm64/boot/Image.gz-dtb ]; then
+            cp android-kernel/out/arch/arm64/boot/Image.gz-dtb AnyKernel3/Image.gz-dtb
+        else
+            cp android-kernel/out/arch/arm64/boot/Image AnyKernel3/Image
+        fi
         rm -rf AnyKernel3/.git* AnyKernel3/README.md
-
-    - name: Upload Joan Image
+    - name: Upload Miatoll AnyKernel3 zip
       if: env.CHECK_IMAGE == 'true'
       uses: actions/upload-artifact@v4
       with:
-        name: Image-LOS22.2-Joan_KernelSU-Next_${{ env.KSUVER }}
-        path: kernel_workspace/android-kernel/out/arch/arm64/boot/Image
-
-    - name: Upload Joan AnyKernel3 zip
-      if: env.CHECK_IMAGE == 'true'
-      uses: actions/upload-artifact@v4
-      with:
-        name: AK3-LOS22.2-Joan_KernelSU-Next_${{ env.KSUVER }}-${{ env.BUILD_TIME }}
-        path: kernel_workspace/AnyKernel3/*
-
-    - name: Build L-01K kernel with KernelSU Next
-      run: |
-        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-        export ARCH=arm64
-        export SUBARCH=arm
-        export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-32/bin:$PATH
-        export KBUILD_BUILD_HOST=Github-Action
-        export KBUILD_BUILD_USER=$(echo ${{ github.actor }} | tr A-Z a-z)
-        BA_CMD="CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_ARM32=arm-linux-androideabi-"
-        EX_CMD="LD=ld.lld LLVM=1 LLVM_IAS=1"
-        DEFCONFIG="lineageos_l01k_defconfig"
-        make O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD $DEFCONFIG
-        make -j$(nproc --all) O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD
-
-    - name: Check kernel output files for L-01K Image
-      run: |
-       cd $GITHUB_WORKSPACE/kernel_workspace
-       if [ -f android-kernel/out/arch/arm64/boot/Image ]; then
-           echo "CHECK_IMAGE_1=true" >> $GITHUB_ENV
-       else
-           echo "Kernel output file is empty"
-           exit 1
-       fi
-
-    - name: Make AnyKernel3 with L-01K Image
-      if: env.CHECK_IMAGE_1 == 'true'
-      run: |
-        cd $GITHUB_WORKSPACE/kernel_workspace
-        rm -rf AnyKernel3
-        git clone https://github.com/JacoaFur/AnyKernel3-Fork --depth=1 AnyKernel3
-        cp android-kernel/out/arch/arm64/boot/Image AnyKernel3/
-        rm -rf AnyKernel3/.git* AnyKernel3/README.md
-
-    - name: Upload L-01K Image
-      if: env.CHECK_IMAGE_1 == 'true'
-      uses: actions/upload-artifact@v4
-      with:
-        name: Image-LOS22.2-l01k_KernelSU-Next_${{ env.KSUVER }}
-        path: kernel_workspace/android-kernel/out/arch/arm64/boot/Image
-
-    - name: Upload L-01K AnyKernel3 zip
-      if: env.CHECK_IMAGE_1 == 'true'
-      uses: actions/upload-artifact@v4
-      with:
-        name: AK3-LOS22.2-l01k_KernelSU-Next_${{ env.KSUVER }}-${{ env.BUILD_TIME }}
+        name: AK3-Miatoll-NetHunter-KSU_${{ env.KSUVER }}-${{ env.BUILD_TIME }}
         path: kernel_workspace/AnyKernel3/*
