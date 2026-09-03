@@ -21,7 +21,7 @@ jobs:
     - name: Setup build kernel environment
       run: |
         sudo apt-get update
-        sudo apt-get install git ccache automake flex lzop bison gperf build-essential zip curl zlib1g-dev g++-multilib bzip2 libbz2-dev liblz4-tool make squashfs-tools dpkg-dev libssl-dev python3 bc libc6-dev-i386 libncurses5-dev
+        sudo apt-get install git ccache automake flex lzop bison gperf build-essential zip curl zlib1g-dev g++-multilib bzip2 libbz2-dev liblz4-tool make squashfs-tools dpkg-dev libssl-dev python3 bc libc6-dev-i386 libncurses5-dev libtinfo5
         mkdir -p $GITHUB_WORKSPACE/kernel_workspace
     
     - name: Download Toolchains (Evasión de Recortes Activa)
@@ -34,7 +34,7 @@ jobs:
         GCC32_B64="aHR0cHM6Ly9naXRodWIuY29tL0xpbmVhZ2VPUy9hbmRyb2lkX3ByZWJ1aWx0c19nY2NfbGludXgteDg2X2FybV9hcm0tbGludXgtYW5kcm9pZGVhYmktNC45LmdpdA=="
         
         # Decodificación directa en memoria
-        URL_CLANG=$(echo "$CLANG_B64" | base64 --decode)
+        URL_CLANG=$(echo "$URL_CLANG_B64" | base64 --decode) || URL_CLANG=$(echo "$CLANG_B64" | base64 --decode)
         URL_GCC64=$(echo "$GCC64_B64" | base64 --decode)
         URL_GCC32=$(echo "$GCC32_B64" | base64 --decode)
         
@@ -99,13 +99,16 @@ jobs:
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         export ARCH=arm64
-        export SUBARCH=arm
+        export SUBARCH=arm64
         export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-32/bin:$PATH
         export KBUILD_BUILD_HOST=Github-Action
         export KBUILD_BUILD_USER=$(echo ${{ github.actor }} | tr A-Z a-z)
-        BA_CMD="CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_ARM32=arm-linux-androideabi-"
+        
+        # Inyección obligatoria de CLANG_TRIPLE manteniendo las directivas de LLVM activas
+        BA_CMD="CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_ARM32=arm-linux-androideabi- CLANG_TRIPLE=aarch64-linux-android-"
         EX_CMD="LD=ld.lld LLVM=1 LLVM_IAS=1"
         DEFCONFIG="miatoll_defconfig"
+        
         make O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD $DEFCONFIG
         make -j$(nproc --all) O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD
 
@@ -137,10 +140,14 @@ jobs:
             cp android-kernel/out/arch/arm64/boot/Image AnyKernel3/Image
         fi
         rm -rf AnyKernel3/.git* AnyKernel3/README.md
+        
+        # Compresión manual para prevenir fallas de empaquetado en upload-artifact
+        cd AnyKernel3
+        zip -r9 ../Miatoll-NetHunter-Kernel.zip *
 
     - name: Upload Artifact
       if: env.CHECK_IMAGE == 'true'
       uses: actions/upload-artifact@v4
       with:
         name: AK3-Miatoll-NetHunter-KSU
-        path: kernel_workspace/AnyKernel3/*
+        path: kernel_workspace/Miatoll-NetHunter-Kernel.zip
