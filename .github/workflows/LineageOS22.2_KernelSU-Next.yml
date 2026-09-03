@@ -108,35 +108,49 @@ jobs:
         find . -type f -name "Makefile*" -exec sed -i 's/$(error "Clang with Android --target detected.*/# Bypass Clang/g' {} +
         find . -type f -name "*.mk" -exec sed -i 's/$(error "Clang with Android --target detected.*/# Bypass Clang/g' {} +
         
+        # Definición del directorio absoluto de Clang
+        CLANG_DIR="$GITHUB_WORKSPACE/kernel_workspace/clang-aosp"
+        
         # 1. Variables de entorno obligatorias para el compilador cruzado
         export ARCH=arm64
         export SUBARCH=arm64
         export LD_LIBRARY_PATH=$GITHUB_WORKSPACE/kernel_workspace/lib_compat:$LD_LIBRARY_PATH
-        export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-32/bin:$PATH
+        
+        # PROTECCIÓN DE ENLAZADOR: Sacamos a Clang del PATH global y solo incluimos GCC para evitar el conflicto .relr.dyn
+        export PATH=$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-32/bin:$PATH
         
         # 2. Metadatos de la compilación
         export KBUILD_BUILD_HOST=Github-Action
         export KBUILD_BUILD_USER=$(echo ${{ github.actor }} | tr A-Z a-z)
         
-        # 3. Forzar al compilador del Host a usar las herramientas del sistema nativo
+        # 3. Forzar al compilador local a usar estrictamente las librerías nativas del Host
         export HOSTCC=gcc
         export HOSTCXX=g++
         
-        # 4. Parámetros explícitos para compilar
-        export CLANG_TRIPLE=aarch64-linux-android-
-        export CROSS_COMPILE=aarch64-linux-gnu-
-        export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+        # 4. Parámetros explícitos direccionados a las rutas exactas de Proton Clang
+        CC_ARGS="
+          CC=$CLANG_DIR/bin/clang \
+          LD=$CLANG_DIR/bin/ld.lld \
+          AR=$CLANG_DIR/bin/llvm-ar \
+          NM=$CLANG_DIR/bin/llvm-nm \
+          OBJCOPY=$CLANG_DIR/bin/llvm-objcopy \
+          OBJDUMP=$CLANG_DIR/bin/llvm-objdump \
+          STRIP=$CLANG_DIR/bin/llvm-strip \
+          CLANG_TRIPLE=aarch64-linux-android- \
+          CROSS_COMPILE=aarch64-linux-gnu- \
+          CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+        "
         
         # 5. Ejecución del miatoll_defconfig
-        make O=out ARCH=arm64 CC=clang LD=ld.lld AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip CLANG_TRIPLE=aarch64-linux-android- CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- miatoll_defconfig
+        make O=out ARCH=arm64 $CC_ARGS miatoll_defconfig
         
-        # Limpieza también en los archivos autogenerados dentro de out/
+        # Limpieza secundaria si se generó un Makefile interno en out/
         if [ -d "out" ]; then
             find out/ -type f -name "Makefile*" -exec sed -i 's/$(error "Clang with Android --target detected.*/# Bypass Clang/g' {} +
         fi
         
-        # 6. Compilación definitiva del núcleo
-        make -j$(nproc --all) O=out ARCH=arm64 CC=clang LD=ld.lld AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip CLANG_TRIPLE=aarch64-linux-android- CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+        # 6. Compilación definitiva del núcleo utilizando hilos en paralelo
+        make -j$(nproc --all) O=out ARCH=arm64 $CC_ARGS
 
     - name: Check kernel output files
       run: |
