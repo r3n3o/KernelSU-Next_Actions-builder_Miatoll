@@ -99,40 +99,37 @@ jobs:
         echo "CONFIG_PID_NS=y" >> arch/arm64/configs/miatoll_defconfig
         echo "CONFIG_NET_NS=y" >> arch/arm64/configs/miatoll_defconfig
         echo "CONFIG_BLK_DEV_LOOP=y" >> arch/arm64/configs/miatoll_defconfig
-        
-        # Parches directos de bypass de bugs de código de Qualcomm
-        echo "CONFIG_SCHED_INFO=n" >> arch/arm64/configs/miatoll_defconfig
-        
-        # LA SOLUCIÓN: Desactivar por completo el problemático filtro de red bpfilter
-        echo "CONFIG_BPFILTER=n" >> arch/arm64/configs/miatoll_defconfig
-        echo "CONFIG_BPFILTER_UMH=n" >> arch/arm64/configs/miatoll_defconfig
 
     - name: Build Miatoll kernel
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         
+        # 1. PARCHES ESTRUCTURALES DIRECTOS EN EL CÓDIGO FUENTE (Evita errores del compilador)
+        # Sanea definitivamente el tipo de dato de red local
+        sed -i 's/compat_uptr_t/unsigned int/g' include/linux/filter.h
+        
+        # Desactiva de raíz la condición restrictiva del macro NR_CPUS en el tracepoint
+        sed -i 's/#error "Unsupported NR_CPUS for lb tracepoint."/\/\/ Parcheado por Actions/g' include/trace/events/sched.h
+        
         # Parche preventivo contra la validación del CLANG_TRIPLE
         find . -type f -name "Makefile*" -exec sed -i 's/$(error "Clang with Android --target detected.*/# Bypass Clang/g' {} +
         find . -type f -name "*.mk" -exec sed -i 's/$(error "Clang with Android --target detected.*/# Bypass Clang/g' {} +
         
-        # Parche local de red para evitar colisiones de tipos de datos de enlazado
-        sed -i '/struct sock_fprog_compat/i #define compat_uptr_t unsigned int' include/linux/filter.h
-        
         CLANG_DIR="$GITHUB_WORKSPACE/kernel_workspace/clang-aosp"
         
-        # 1. Variables de entorno obligatorias para el compilador cruzado
+        # 2. Variables de entorno obligatorias para el compilador cruzado
         export ARCH=arm64
         export SUBARCH=arm64
         export LD_LIBRARY_PATH=$GITHUB_WORKSPACE/kernel_workspace/lib_compat:$LD_LIBRARY_PATH
         export PATH=$GITHUB_WORKSPACE/gcc-64/bin:$GITHUB_WORKSPACE/gcc-32/bin:$PATH
         
-        # 2. Metadatos
+        # 3. Metadatos
         export KBUILD_BUILD_HOST=Github-Action
         export KBUILD_BUILD_USER=$(echo ${{ github.actor }} | tr A-Z a-z)
         export HOSTCC=gcc
         export HOSTCXX=g++
         
-        # 3. Argumentos explícitos para Proton Clang
+        # 4. Argumentos explícitos para Proton Clang
         CC_ARGS="
           CC=$CLANG_DIR/bin/clang \
           LD=$CLANG_DIR/bin/ld.lld \
@@ -147,7 +144,7 @@ jobs:
           CROSS_COMPILE_ARM32=arm-linux-gnueabi-
         "
         
-        # 4. Generación del defconfig
+        # 5. Generación del defconfig
         make O=out ARCH=arm64 $CC_ARGS miatoll_defconfig
         
         # Limpieza secundaria interna en out/
@@ -155,7 +152,7 @@ jobs:
             find out/ -type f -name "Makefile*" -exec sed -i 's/$(error "Clang with Android --target detected.*/# Bypass Clang/g' {} +
         fi
         
-        # 5. Compilación del núcleo definitiva
+        # 6. Compilación del núcleo definitiva
         make -j$(nproc --all) O=out ARCH=arm64 $CC_ARGS
 
     - name: Check and Locate Kernel Output Files
