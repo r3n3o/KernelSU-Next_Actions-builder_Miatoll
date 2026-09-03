@@ -24,12 +24,14 @@ jobs:
         sudo apt-get install git ccache automake flex lzop bison gperf build-essential zip curl zlib1g-dev g++-multilib bzip2 libbz2-dev liblz4-tool make squashfs-tools dpkg-dev libssl-dev python3 bc libc6-dev-i386 libncurses5-dev
         mkdir -p $GITHUB_WORKSPACE/kernel_workspace
     
-    - name: Download Toolchains
+    - name: Download Toolchains (GitHub Mirrors Anti-403)
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
-        git clone https://gitlab.com clang-aosp --depth=1
-        git clone https://gitlab.com gcc-64 --depth=1
-        git clone https://github.com gcc-32 --depth=1
+        # Descarga de Clang optimizado para Android 16 desde GitHub
+        git clone https://github.com --depth=1 -b 17 clang-aosp
+        # Descarga de GCC para arquitecturas de 64 y 32 bits desde GitHub
+        git clone https://github.com --depth=1 gcc-64
+        git clone https://github.com --depth=1 gcc-32
     
     - name: Download kernel source
       run: |
