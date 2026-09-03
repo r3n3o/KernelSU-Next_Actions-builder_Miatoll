@@ -107,7 +107,7 @@ jobs:
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         
-        # Bypass preventivo contra la validación del CLANG_TRIPLE
+        # Parche preventivo contra la validación del CLANG_TRIPLE
         find . -type f -name "Makefile*" -exec sed -i 's/$(error "Clang with Android --target detected.*/# Bypass Clang/g' {} +
         find . -type f -name "*.mk" -exec sed -i 's/$(error "Clang with Android --target detected.*/# Bypass Clang/g' {} +
         
@@ -150,19 +150,12 @@ jobs:
             find out/ -type f -name "Makefile*" -exec sed -i 's/$(error "Clang with Android --target detected.*/# Bypass Clang/g' {} +
         fi
         
-        # 5. Compilación del núcleo guardando un registro local para emergencias
-        make -j$(nproc --all) O=out ARCH=arm64 $CC_ARGS 2>&1 | tee build_output.log || {
-            echo "=========================================================="
-            echo "🚨 DETECTOR AUTOMÁTICO DE ERRORES DE COMPILACIÓN EN ROJO 🚨"
-            echo "=========================================================="
-            grep -E "error:" build_output.log | head -n 20
-            exit 2
-        }
+        # 5. LLAMADA DIRECTA: Dejamos correr a Make de forma natural sin desvíos de logs artificiales
+        make -j$(nproc --all) O=out ARCH=arm64 $CC_ARGS
 
     - name: Check and Locate Kernel Output Files
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
-        # Escaneo dinámico buscando el binario generado por Clang
         BOOT_DIR="android-kernel/out/arch/arm64/boot"
         FOUND_IMG=""
         
@@ -179,7 +172,7 @@ jobs:
             echo "CHECK_IMAGE=true" >> $GITHUB_ENV
         else
             echo "🚨 ERROR: No se encontró ningún binario Image válido en $BOOT_DIR"
-            ls -la $BOOT_DIR || echo "El directorio ni siquiera existe"
+            ls -la $BOOT_DIR || echo "El directorio no está listo o la compilación global falló"
             exit 1
         fi
 
@@ -194,15 +187,12 @@ jobs:
         
         git clone "$URL_AK3" --depth=1 AnyKernel3
         
-        # Copiamos dinámicamente el archivo detectado usando la variable guardada en el entorno
+        # Copia dinámica e inyección
         cp android-kernel/out/arch/arm64/boot/${{ env.KERNEL_FILE_NAME }} AnyKernel3/${{ env.KERNEL_FILE_NAME }}
-        
-        # Ajustamos el script interno de AnyKernel3 para que apunte exactamente al nombre de tu archivo
         sed -i "s/kernel.string=.*/kernel.string=Miatoll Hacking Kernel por ${{ github.actor }}/g" AnyKernel3/anykernel.sh
-        
         rm -rf AnyKernel3/.git* AnyKernel3/README.md
         
-        # Generación del archivo comprimido listo para TWRP/OrangeFox
+        # Archivo comprimido definitivo
         cd AnyKernel3
         zip -r9 ../Miatoll-NetHunter-Kernel.zip *
 
