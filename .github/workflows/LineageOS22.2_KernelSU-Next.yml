@@ -77,28 +77,29 @@ jobs:
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         
+        # Enlazamos la ruta estática y limpia de Proton Clang al sistema
+        export PATH="${GITHUB_WORKSPACE}/kernel_workspace/proton-clang/bin:${PATH}"
         export ARCH=arm64
         export SUBARCH=arm
-        
-        # Eliminamos a Clang del PATH, dejamos solo las herramientas GCC de 64 y 32 bits
-        export PATH="${GITHUB_WORKSPACE}/kernel_workspace/gcc-64/bin:${GITHUB_WORKSPACE}/kernel_workspace/gcc-32/bin:${PATH}"
         export KBUILD_BUILD_HOST=Github-Action
         export KBUILD_BUILD_USER=$(echo ${{ github.actor }} | tr A-Z a-z)
         
-        # Simplificamos los CC_ARGS al máximo para un entorno GCC Puro
+        # Argumentos nativos apuntando a los binarios integrados en Proton
         CC_ARGS="
           ARCH=arm64 \
-          CROSS_COMPILE=aarch64-linux-android- \
-          CROSS_COMPILE_ARM32=arm-linux-androideabi- \
+          CC=clang \
+          CROSS_COMPILE=aarch64-linux-gnu- \
+          CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+          LD=ld.lld \
+          AR=llvm-ar \
+          NM=llvm-nm \
+          OBJCOPY=llvm-objcopy \
+          OBJDUMP=llvm-objdump \
+          STRIP=llvm-strip
         "
         
-        # Ejecutamos sin banderas KCFLAGS de Clang
         make O=out $CC_ARGS miatoll_defconfig
         make -j$(nproc --all) O=out $CC_ARGS
-        "
-        # Banderas KCFLAGS inyectadas para forzar el ignorar advertencias desconocidas
-        make O=out $CC_ARGS KCFLAGS="-Wno-unknown-warning-option" miatoll_defconfig
-        make -j$(nproc --all) O=out $CC_ARGS KCFLAGS="-Wno-unknown-warning-option
 
     - name: Check and Locate Kernel Output Files
       run: |
