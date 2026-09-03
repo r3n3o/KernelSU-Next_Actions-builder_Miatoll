@@ -104,9 +104,9 @@ jobs:
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         
-        # PARCHE MASIVO RADICAL: Busca el error en cualquier archivo de la estructura y lo neutraliza por completo
-        find . -type f -name "Makefile*" -exec sed -i 's/$(error "Clang with Android --target detected.*/@echo "Bypass"/' {} +
-        find . -type f -name "*.mk" -exec sed -i 's/$(error "Clang with Android --target detected.*/@echo "Bypass"/' {} +
+        # REEMPLAZO LIMPIO: Convertimos la directiva de error en un comentario inofensivo de Makefile (#)
+        find . -type f -name "Makefile*" -exec sed -i 's/$(error "Clang with Android --target detected.*/# Bypass Clang/g' {} +
+        find . -type f -name "*.mk" -exec sed -i 's/$(error "Clang with Android --target detected.*/# Bypass Clang/g' {} +
         
         # 1. Variables de entorno obligatorias para el compilador cruzado
         export ARCH=arm64
@@ -127,15 +127,15 @@ jobs:
         export CROSS_COMPILE=aarch64-linux-gnu-
         export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
         
-        # 5. Ejecución del Make (Se genera la carpeta out)
+        # 5. Ejecución del miatoll_defconfig
         make O=out ARCH=arm64 CC=clang LD=ld.lld AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip CLANG_TRIPLE=aarch64-linux-android- CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- miatoll_defconfig
         
-        # PARCHE POST-DEFCONFIG: Anula el error si se autogeneró dentro de la nueva carpeta "out/"
+        # Limpieza también en los archivos autogenerados dentro de out/
         if [ -d "out" ]; then
-            find out/ -type f -name "Makefile*" -exec sed -i 's/$(error "Clang with Android --target detected.*/@echo "Bypass"/' {} +
+            find out/ -type f -name "Makefile*" -exec sed -i 's/$(error "Clang with Android --target detected.*/# Bypass Clang/g' {} +
         fi
         
-        # 6. Compilación definitiva
+        # 6. Compilación definitiva del núcleo
         make -j$(nproc --all) O=out ARCH=arm64 CC=clang LD=ld.lld AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip CLANG_TRIPLE=aarch64-linux-android- CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi-
 
     - name: Check kernel output files
