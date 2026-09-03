@@ -5,6 +5,8 @@ on:
 
 env:
   TZ: America/New_York
+  # Evitamos advertencias molestas de Node en los logs del runner de GitHub
+  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
 jobs:
   build:
@@ -33,17 +35,17 @@ jobs:
         GCC64_B64="aHR0cHM6Ly9naXRodWIuY29tL0xpbmVhZ2VPUy9hbmRyb2lkX3ByZWJ1aWx0c19nY2NfbGludXgteDg2X2FhcmNoNjRfYWFyY2g2NC1saW51eC1hbmRyb2lkLTQuOS5naXQ="
         GCC32_B64="aHR0cHM6Ly9naXRodWIuY29tL0xpbmVhZ2VPUy9hbmRyb2lkX3ByZWJ1aWx0c19nY2NfbGludXgteDg2X2FybV9hcm0tbGludXgtYW5kcm9pZGVhYmktNC45LmdpdA=="
         
-        # Decodificación directa en memoria
+        # Decodificación directa y limpia en memoria
         URL_CLANG=$(echo "$CLANG_B64" | base64 --decode)
         URL_GCC64=$(echo "$GCC64_B64" | base64 --decode)
         URL_GCC32=$(echo "$GCC32_B64" | base64 --decode)
         
-        # Clonación limpia
+        # Clonación limpia de herramientas
         git clone "$URL_CLANG" --depth=1 clang-aosp
         git clone "$URL_GCC64" --depth=1 gcc-64
         git clone "$URL_GCC32" --depth=1 gcc-32
 
-        # Solución preventiva: Crear un enlace simbólico de libtinfo.so.5 apuntando a la versión 6 dentro del PATH
+        # Inyección preventiva: Enlace simbólico para mitigar la ausencia de libtinfo5 en Ubuntu 24.04
         mkdir -p $GITHUB_WORKSPACE/kernel_workspace/lib_compat
         ln -s /usr/lib/x86_64-linux-gnu/libtinfo.so.6 $GITHUB_WORKSPACE/kernel_workspace/lib_compat/libtinfo.so.5
     
@@ -104,13 +106,15 @@ jobs:
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         export ARCH=arm64
         export SUBARCH=arm64
-        # Incluimos nuestra librería de compatibilidad en el LD_LIBRARY_PATH para evitar caídas de GCC
+        
+        # Mapeamos la ruta de compatibilidad de librerías para GCC 4.9 y Clang
         export LD_LIBRARY_PATH=$GITHUB_WORKSPACE/kernel_workspace/lib_compat:$LD_LIBRARY_PATH
         export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-32/bin:$PATH
+        
         export KBUILD_BUILD_HOST=Github-Action
         export KBUILD_BUILD_USER=$(echo ${{ github.actor }} | tr A-Z a-z)
         
-        # Inyección obligatoria de CLANG_TRIPLE manteniendo las directivas de LLVM activas
+        # Variables de construcción corregidas para Proton Clang con LLVM nativo
         BA_CMD="CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_ARM32=arm-linux-androideabi- CLANG_TRIPLE=aarch64-linux-android-"
         EX_CMD="LD=ld.lld LLVM=1 LLVM_IAS=1"
         DEFCONFIG="miatoll_defconfig"
@@ -147,7 +151,7 @@ jobs:
         fi
         rm -rf AnyKernel3/.git* AnyKernel3/README.md
         
-        # Compresión manual para prevenir fallas de empaquetado en upload-artifact
+        # Generación del archivo comprimido listo para flashear
         cd AnyKernel3
         zip -r9 ../Miatoll-NetHunter-Kernel.zip *
 
