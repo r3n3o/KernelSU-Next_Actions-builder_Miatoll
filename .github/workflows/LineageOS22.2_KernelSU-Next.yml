@@ -65,10 +65,10 @@ jobs:
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         
-        # LIMPIEZA ABSOLUTA PREVENTIVA: Borramos cualquier rastro previo para evitar el exit code 128
+        # Limpieza de rutas antiguas para evitar conflictos
         rm -rf KernelSU KernelSU-Next drivers/kernelsu drivers/kernelsu-next
         
-        # Clonamos de forma limpia el código de KernelSU dentro del directorio de drivers
+        # CORRECCIÓN DE LA URL: Apuntamos de forma limpia al repositorio oficial de KernelSU
         git clone https://github.com drivers/kernelsu --depth=1
         
         # Inyectamos la directiva de compilación eliminando duplicados mediante un chequeo rápido
