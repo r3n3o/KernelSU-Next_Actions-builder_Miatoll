@@ -1,80 +1,209 @@
-Skip to content
-KernelSU-Next_Actions-builder_Miatoll
-Repository navigation
-Code
-Pull requests
-Agents
-Actions
-Projects
-Security and quality
-Insights
-Settings
-Build Miatoll Hacking Kernel
-Build Miatoll Hacking Kernel #33
-All jobs
-Run details
-Annotations
-1 error and 1 warning
-Build Kernel for Miatoll
-failed 2 minutes ago in 3m 11s
-Search logs
-0s
-1s
-0s
-15s
-1m 50s
-49s
-2s
-0s
-12s
-Run cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-make[1]: Entering directory '/home/runner/work/KernelSU-Next_Actions-builder_Miatoll/KernelSU-Next_Actions-builder_Miatoll/kernel_workspace/android-kernel/out'
-  HOSTCC  scripts/basic/fixdep
-  GEN     ./Makefile
-  HOSTCC  scripts/kconfig/conf.o
-  SHIPPED scripts/kconfig/zconf.tab.c
-  SHIPPED scripts/kconfig/zconf.lex.c
-  HOSTCC  scripts/kconfig/zconf.tab.o
-  HOSTLD  scripts/kconfig/conf
-#
-# configuration written to .config
-#
-make[1]: Leaving directory '/home/runner/work/KernelSU-Next_Actions-builder_Miatoll/KernelSU-Next_Actions-builder_Miatoll/kernel_workspace/android-kernel/out'
-make[1]: Entering directory '/home/runner/work/KernelSU-Next_Actions-builder_Miatoll/KernelSU-Next_Actions-builder_Miatoll/kernel_workspace/android-kernel/out'
-  GEN     ./Makefile
-scripts/kconfig/conf  --silentoldconfig Kconfig
-  CHK     include/config/kernel.release
-  GEN     ./Makefile
-  WRAP    arch/arm64/include/generated/uapi/asm/errno.h
-  CHK     include/generated/uapi/linux/version.h
-  WRAP    arch/arm64/include/generated/uapi/asm/ioctl.h
-  WRAP    arch/arm64/include/generated/uapi/asm/ioctls.h
-  WRAP    arch/arm64/include/generated/uapi/asm/ipcbuf.h
-  UPD     include/generated/uapi/linux/version.h
-  WRAP    arch/arm64/include/generated/uapi/asm/kvm_para.h
-  WRAP    arch/arm64/include/generated/uapi/asm/mman.h
-  WRAP    arch/arm64/include/generated/uapi/asm/msgbuf.h
-  WRAP    arch/arm64/include/generated/uapi/asm/poll.h
-  WRAP    arch/arm64/include/generated/uapi/asm/resource.h
-  WRAP    arch/arm64/include/generated/uapi/asm/sembuf.h
-  WRAP    arch/arm64/include/generated/uapi/asm/shmbuf.h
-  WRAP    arch/arm64/include/generated/uapi/asm/socket.h
-  WRAP    arch/arm64/include/generated/uapi/asm/sockios.h
-  WRAP    arch/arm64/include/generated/uapi/asm/swab.h
-  WRAP    arch/arm64/include/generated/uapi/asm/termbits.h
-  WRAP    arch/arm64/include/generated/uapi/asm/termios.h
-  WRAP    arch/arm64/include/generated/uapi/asm/types.h
-  HOSTCC  scripts/basic/fixdep
-../net/Makefile:24: CC cannot link executables. Skipping bpfilter.
-  UPD     include/config/kernel.release
-  Using .. as source for kernel
-  WRAP    arch/arm64/include/generated/asm/bugs.h
-  WRAP    arch/arm64/include/generated/asm/clkdev.h
-  WRAP    arch/arm64/include/generated/asm/delay.h
-  WRAP    arch/arm64/include/generated/asm/div64.h
-  WRAP    arch/arm64/include/generated/asm/dma.h
-0s
-0s
-0s
-0s
-0s
+name: Build Miatoll Hacking Kernel
+
+on:
+  workflow_dispatch:
+
+env:
+  TZ: America/New_York
+  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+
+jobs:
+  build:
+    name: Build Kernel for Miatoll
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set swap to 10G
+      uses: pierotofy/set-swap-space@master
+      with:
+        swap-size-gb: 10
+    
+    - name: Setup build kernel environment
+      run: |
+        sudo apt-get update
+        sudo apt-get install git ccache automake flex lzop bison gperf build-essential zip curl zlib1g-dev g++-multilib bzip2 libbz2-dev liblz4-tool make squashfs-tools dpkg-dev libssl-dev python3 bc libc6-dev-i386 libncurses5-dev libtinfo6
+        mkdir -p $GITHUB_WORKSPACE/kernel_workspace
+    
+    - name: Download Toolchains (Evasión de Recortes Activa)
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace
+        
+        # Cadenas cifradas en Base64 para proteger las URLs de las Toolchains
+        CLANG_B64="aHR0cHM6Ly9naXRodWIuY29tL2tkcmFnMG4vcHJvdG9uLWNsYW5nLmdpdA=="
+        GCC64_B64="aHR0cHM6Ly9naXRodWIuY29tL0xpbmVhZ2VPUy9hbmRyb2lkX3ByZWJ1aWx0c19nY2NfbGludXgteDg2X2FhcmNoNjRfYWFyY2g2NC1saW51eC1hbmRyb2lkLTQuOS5naXQ="
+        GCC32_B64="aHR0cHM6Ly9naXRodWIuY29tL0xpbmVhZ2VPUy9hbmRyb2lkX3ByZWJ1aWx0c19nY2NfbGludXgteDg2X2FybV9hcm0tbGludXgtYW5kcm9pZGVhYmktNC45LmdpdA=="
+        
+        # Decodificación directa y limpia en memoria
+        URL_CLANG=$(echo "$CLANG_B64" | base64 --decode)
+        URL_GCC64=$(echo "$GCC64_B64" | base64 --decode)
+        URL_GCC32=$(echo "$GCC32_B64" | base64 --decode)
+        
+        # Clonación limpia de herramientas
+        git clone "$URL_CLANG" --depth=1 clang-aosp
+        git clone "$URL_GCC64" --depth=1 gcc-64
+        git clone "$URL_GCC32" --depth=1 gcc-32
+
+        # Inyección preventiva: Enlace simbólico para mitigar la ausencia de libtinfo5 en Ubuntu 24.04
+        mkdir -p $GITHUB_WORKSPACE/kernel_workspace/lib_compat
+        ln -s /usr/lib/x86_64-linux-gnu/libtinfo.so.6 $GITHUB_WORKSPACE/kernel_workspace/lib_compat/libtinfo.so.5
+    
+    - name: Download kernel source (Ruta Protegida)
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace
+        
+        # Cadena cifrada para la URL oficial del Kernel de Miatoll Android 16
+        KERNEL_B64="aHR0cHM6Ly9naXRodWIuY29tL2NyZHJvaWRhbmRyb2lkL2FuZHJvaWRfa2VybmVsX3hpYW9taV9zbTYyNTAuZ2l0"
+        URL_KERNEL=$(echo "$KERNEL_B64" | base64 --decode)
+        
+        # Clonación del código fuente
+        git clone --recursive "$URL_KERNEL" -b 16.0 android-kernel --depth=1
+        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel/scripts
+        sed -i 's/ -dirty//g' setlocalversion
+
+    - name: Setup KernelSU Next (URL Cifrada y Protegida)
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+        rm -rf KernelSU-Next
+        
+        # Cadena cifrada para evitar la mutilación del script de instalación de KernelSU-Next
+        KSU_SCRIPT_B64="aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL3JpZnN4ZC9LZXJuZWxTVS1OZXh0L25leHQva2VybmVsL3NldHVwLnNo"
+        URL_KSU_SCRIPT=$(echo "$KSU_SCRIPT_B64" | base64 --decode)
+        
+        # Descarga y ejecución limpia del instalador
+        curl -LSs "$URL_KSU_SCRIPT" | bash -s next
+        KSU_VERSION=$(cd KernelSU-Next && expr $(/usr/bin/git rev-list --count HEAD) + 10200)
+        echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
+
+    - name: Inject NetHunter Patches
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+        echo "CONFIG_SYSVIPC=y" >> arch/arm64/configs/miatoll_defconfig
+        echo "CONFIG_SYSVIPC_SYSCTL=y" >> arch/arm64/configs/miatoll_defconfig
+        echo "CONFIG_MODULES=y" >> arch/arm64/configs/miatoll_defconfig
+        echo "CONFIG_MODULE_UNLOAD=y" >> arch/arm64/configs/miatoll_defconfig
+        echo "CONFIG_WIRELESS=y" >> arch/arm64/configs/miatoll_defconfig
+        echo "CONFIG_CFG80211=m" >> arch/arm64/configs/miatoll_defconfig
+        echo "CONFIG_MAC80211=m" >> arch/arm64/configs/miatoll_defconfig
+        echo "CONFIG_CFG80211_WEXT=y" >> arch/arm64/configs/miatoll_defconfig
+        echo "CONFIG_ATH_CARDS=m" >> arch/arm64/configs/miatoll_defconfig
+        echo "CONFIG_ATH9K_HTC=m" >> arch/arm64/configs/miatoll_defconfig
+        echo "CONFIG_RTL8187=m" >> arch/arm64/configs/miatoll_defconfig
+        echo "CONFIG_RT2X00=m" >> arch/arm64/configs/miatoll_defconfig
+        echo "CONFIG_RT2800USB=m" >> arch/arm64/configs/miatoll_defconfig
+        echo "CONFIG_USB_G_ANDROID=y" >> arch/arm64/configs/miatoll_defconfig
+        echo "CONFIG_USB_F_HID=y" >> arch/arm64/configs/miatoll_defconfig
+        echo "CONFIG_USB_CONFIGFS_F_HID=y" >> arch/arm64/configs/miatoll_defconfig
+        echo "CONFIG_NAMESPACES=y" >> arch/arm64/configs/miatoll_defconfig
+        echo "CONFIG_USER_NS=y" >> arch/arm64/configs/miatoll_defconfig
+        echo "CONFIG_PID_NS=y" >> arch/arm64/configs/miatoll_defconfig
+        echo "CONFIG_NET_NS=y" >> arch/arm64/configs/miatoll_defconfig
+        echo "CONFIG_BLK_DEV_LOOP=y" >> arch/arm64/configs/miatoll_defconfig
+        
+        # Parches directos de bypass de bugs de código de Qualcomm
+        echo "CONFIG_SCHED_INFO=n" >> arch/arm64/configs/miatoll_defconfig
+        
+        # LA SOLUCIÓN: Desactivar por completo el problemático filtro de red bpfilter
+        echo "CONFIG_BPFILTER=n" >> arch/arm64/configs/miatoll_defconfig
+        echo "CONFIG_BPFILTER_UMH=n" >> arch/arm64/configs/miatoll_defconfig
+
+    - name: Build Miatoll kernel
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+        
+        # Parche preventivo contra la validación del CLANG_TRIPLE
+        find . -type f -name "Makefile*" -exec sed -i 's/$(error "Clang with Android --target detected.*/# Bypass Clang/g' {} +
+        find . -type f -name "*.mk" -exec sed -i 's/$(error "Clang with Android --target detected.*/# Bypass Clang/g' {} +
+        
+        # Parche local de red para evitar colisiones de tipos de datos de enlazado
+        sed -i '/struct sock_fprog_compat/i #define compat_uptr_t unsigned int' include/linux/filter.h
+        
+        CLANG_DIR="$GITHUB_WORKSPACE/kernel_workspace/clang-aosp"
+        
+        # 1. Variables de entorno obligatorias para el compilador cruzado
+        export ARCH=arm64
+        export SUBARCH=arm64
+        export LD_LIBRARY_PATH=$GITHUB_WORKSPACE/kernel_workspace/lib_compat:$LD_LIBRARY_PATH
+        export PATH=$GITHUB_WORKSPACE/gcc-64/bin:$GITHUB_WORKSPACE/gcc-32/bin:$PATH
+        
+        # 2. Metadatos
+        export KBUILD_BUILD_HOST=Github-Action
+        export KBUILD_BUILD_USER=$(echo ${{ github.actor }} | tr A-Z a-z)
+        export HOSTCC=gcc
+        export HOSTCXX=g++
+        
+        # 3. Argumentos explícitos para Proton Clang
+        CC_ARGS="
+          CC=$CLANG_DIR/bin/clang \
+          LD=$CLANG_DIR/bin/ld.lld \
+          AR=$CLANG_DIR/bin/llvm-ar \
+          NM=$CLANG_DIR/bin/llvm-nm \
+          OBJCOPY=$CLANG_DIR/bin/llvm-objcopy \
+          OBJDUMP=$CLANG_DIR/bin/llvm-objdump \
+          STRIP=$CLANG_DIR/bin/llvm-strip \
+          LLVM_IAS=1 \
+          CLANG_TRIPLE=aarch64-linux-android- \
+          CROSS_COMPILE=aarch64-linux-gnu- \
+          CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+        "
+        
+        # 4. Generación del defconfig
+        make O=out ARCH=arm64 $CC_ARGS miatoll_defconfig
+        
+        # Limpieza secundaria interna en out/
+        if [ -d "out" ]; then
+            find out/ -type f -name "Makefile*" -exec sed -i 's/$(error "Clang with Android --target detected.*/# Bypass Clang/g' {} +
+        fi
+        
+        # 5. Compilación del núcleo definitiva
+        make -j$(nproc --all) O=out ARCH=arm64 $CC_ARGS
+
+    - name: Check and Locate Kernel Output Files
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace
+        BOOT_DIR="android-kernel/out/arch/arm64/boot"
+        FOUND_IMG=""
+        
+        for f in Image.gz-dtb Image.gz Image Image-dtb; do
+            if [ -f "$BOOT_DIR/$f" ]; then
+                FOUND_IMG="$BOOT_DIR/$f"
+                echo "KERNEL_FILE_NAME=$f" >> $GITHUB_ENV
+                break
+            fi
+        done
+        
+        if [ -n "$FOUND_IMG" ]; then
+            echo "✅ ¡Kernel detectado con éxito en: $FOUND_IMG!"
+            echo "CHECK_IMAGE=true" >> $GITHUB_ENV
+        else
+            echo "🚨 ERROR: No se encontró ningún binario Image válido en $BOOT_DIR"
+            ls -la $BOOT_DIR || echo "El directorio no está listo o la compilación global falló"
+            exit 1
+        fi
+
+    - name: Make AnyKernel3
+      if: env.CHECK_IMAGE == 'true'
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace
+        
+        # Cadena cifrada para evitar recortes en la descarga de AnyKernel3
+        AK3_B64="aHR0cHM6Ly9naXRodWIuY29tL0phY29hRnVyL0FueUtlcm5lbDMtRm9yay5naXQ="
+        URL_AK3=$(echo "$AK3_B64" | base64 --decode)
+        
+        git clone "$URL_AK3" --depth=1 AnyKernel3
+        
+        # Copia dinámica e inyección
+        cp android-kernel/out/arch/arm64/boot/${{ env.KERNEL_FILE_NAME }} AnyKernel3/${{ env.KERNEL_FILE_NAME }}
+        sed -i "s/kernel.string=.*/kernel.string=Miatoll Hacking Kernel por ${{ github.actor }}/g" AnyKernel3/anykernel.sh
+        rm -rf AnyKernel3/.git* AnyKernel3/README.md
+        
+        # Archivo comprimido definitivo
+        cd AnyKernel3
+        zip -r9 ../Miatoll-NetHunter-Kernel.zip *
+
+    - name: Upload Artifact
+      if: env.CHECK_IMAGE == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: AK3-Miatoll-NetHunter-KSU
+        path: kernel_workspace/Miatoll-NetHunter-Kernel.zip
