@@ -111,7 +111,7 @@ jobs:
         find . -type f -name "Makefile*" -exec sed -i 's/$(error "Clang with Android --target detected.*/# Bypass Clang/g' {} +
         find . -type f -name "*.mk" -exec sed -i 's/$(error "Clang with Android --target detected.*/# Bypass Clang/g' {} +
         
-        # BYPASS COMPAT_UPTR_T: Inyectamos el tipo de dato si no se mapeó automáticamente
+        # Bypass de tipos de datos en la pila de red
         sed -i '540i #ifndef compat_uptr_t\ntypedef compat_uint_t compat_uptr_t;\n#endif' include/linux/filter.h
         
         CLANG_DIR="$GITHUB_WORKSPACE/kernel_workspace/clang-aosp"
@@ -159,17 +159,29 @@ jobs:
             exit 2
         }
 
-    - name: Check kernel output files
+    - name: Check and Locate Kernel Output Files
       run: |
-       cd $GITHUB_WORKSPACE/kernel_workspace
-       if [ -f android-kernel/out/arch/arm64/boot/Image.gz-dtb ]; then
-           echo "CHECK_IMAGE=true" >> $GITHUB_ENV
-       elif [ -f android-kernel/out/arch/arm64/boot/Image ]; then
-           echo "CHECK_IMAGE=true" >> $GITHUB_ENV
-       else
-           echo "Kernel output file is empty"
-           exit 1
-       fi
+        cd $GITHUB_WORKSPACE/kernel_workspace
+        # Escaneo dinámico buscando el binario generado por Clang
+        BOOT_DIR="android-kernel/out/arch/arm64/boot"
+        FOUND_IMG=""
+        
+        for f in Image.gz-dtb Image.gz Image Image-dtb; do
+            if [ -f "$BOOT_DIR/$f" ]; then
+                FOUND_IMG="$BOOT_DIR/$f"
+                echo "KERNEL_FILE_NAME=$f" >> $GITHUB_ENV
+                break
+            fi
+        done
+        
+        if [ -n "$FOUND_IMG" ]; then
+            echo "✅ ¡Kernel detectado con éxito en: $FOUND_IMG!"
+            echo "CHECK_IMAGE=true" >> $GITHUB_ENV
+        else
+            echo "🚨 ERROR: No se encontró ningún binario Image válido en $BOOT_DIR"
+            ls -la $BOOT_DIR || echo "El directorio ni siquiera existe"
+            exit 1
+        fi
 
     - name: Make AnyKernel3
       if: env.CHECK_IMAGE == 'true'
@@ -181,14 +193,16 @@ jobs:
         URL_AK3=$(echo "$AK3_B64" | base64 --decode)
         
         git clone "$URL_AK3" --depth=1 AnyKernel3
-        if [ -f android-kernel/out/arch/arm64/boot/Image.gz-dtb ]; then
-            cp android-kernel/out/arch/arm64/boot/Image.gz-dtb AnyKernel3/Image.gz-dtb
-        else
-            cp android-kernel/out/arch/arm64/boot/Image AnyKernel3/Image
-        fi
+        
+        # Copiamos dinámicamente el archivo detectado usando la variable guardada en el entorno
+        cp android-kernel/out/arch/arm64/boot/${{ env.KERNEL_FILE_NAME }} AnyKernel3/${{ env.KERNEL_FILE_NAME }}
+        
+        # Ajustamos el script interno de AnyKernel3 para que apunte exactamente al nombre de tu archivo
+        sed -i "s/kernel.string=.*/kernel.string=Miatoll Hacking Kernel por ${{ github.actor }}/g" AnyKernel3/anykernel.sh
+        
         rm -rf AnyKernel3/.git* AnyKernel3/README.md
         
-        # Generación del archivo comprimido
+        # Generación del archivo comprimido listo para TWRP/OrangeFox
         cd AnyKernel3
         zip -r9 ../Miatoll-NetHunter-Kernel.zip *
 
