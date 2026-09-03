@@ -19,10 +19,11 @@ jobs:
       with:
         swap-size-gb: 10
 
-    - name: Descargar e Instalar libtinfo5 (Compatibilidad Heredada)
+    - name: Parche de Compatibilidad para libtinfo5
       run: |
-        wget http://ubuntu.com
-        sudo apt-get install -y ./libtinfo5_6.3-2ubuntu0.1_amd64.deb
+        sudo apt-get update
+        sudo apt-get install -y libtinfo6
+        sudo ln -sf /lib/x86_64-linux-gnu/libtinfo.so.6 /lib/x86_64-linux-gnu/libtinfo.so.5
 
     - name: Setup build kernel environment
       run: |
