@@ -104,44 +104,42 @@ jobs:
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         
-        # 1. Rutas absolutas a los compiladores descargados
-        CLANG_DIR="$GITHUB_WORKSPACE/kernel_workspace/clang-aosp"
-        
-        # 2. Configuración estricta de variables de arquitectura
+        # 1. Definición estricta de variables de arquitectura
         export ARCH=arm64
         export SUBARCH=arm64
         
-        # 3. Entorno de librerías cruzadas para GCC heredados
+        # 2. Entorno de compatibilidad para evitar caídas de librerías antiguas
         export LD_LIBRARY_PATH=$GITHUB_WORKSPACE/kernel_workspace/lib_compat:$LD_LIBRARY_PATH
         
-        # 4. PATH ordenado de forma inteligente: Ponemos GCC al principio y dejamos que el sistema use su propio ld nativo para scripts locales
-        export PATH=$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-32/bin:$PATH
+        # 3. Agregamos las carpetas bin de las toolchains al PATH global ordenadamente
+        export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-32/bin:$PATH
         
-        # 5. Metadatos de la compilación
+        # 4. Metadatos de la compilación
         export KBUILD_BUILD_HOST=Github-Action
         export KBUILD_BUILD_USER=$(echo ${{ github.actor }} | tr A-Z a-z)
         
-        # 6. Mapeo explícito a ejecutables LLVM específicos de Proton Clang para evitar colisiones con el Host
-        export CC="$CLANG_DIR/bin/clang"
-        export LD="$CLANG_DIR/bin/ld.lld"
-        export AR="$CLANG_DIR/bin/llvm-ar"
-        export NM="$CLANG_DIR/bin/llvm-nm"
-        export OBJCOPY="$CLANG_DIR/bin/llvm-objcopy"
-        export OBJDUMP="$CLANG_DIR/bin/llvm-objdump"
-        export STRIP="$CLANG_DIR/bin/llvm-strip"
-        
-        # 7. Asignación obligatoria del Triple Objetivo y compilación cruzada
-        export CROSS_COMPILE=aarch64-linux-android-
-        export CROSS_COMPILE_ARM32=arm-linux-androideabi-
-        export CLANG_TRIPLE=aarch64-linux-android-
-        
-        # 8. Forzar al compilador del Host a usar las librerías nativas del sistema (Solución al fallo relr.dyn)
+        # 5. Forzar al compilador del Host a usar las utilidades del sistema de Ubuntu 24.04
         export HOSTCC=gcc
         export HOSTCXX=g++
         
-        # 9. Ejecución secuencial de Make
-        make O=out miatoll_defconfig
-        make -j$(nproc --all) O=out
+        # 6. Agrupamos los argumentos obligatorios del comando Make para inyectarlos EN la llamada
+        BUILD_ARGS="
+          ARCH=arm64 \
+          CC=clang \
+          LD=ld.lld \
+          AR=llvm-ar \
+          NM=llvm-nm \
+          OBJCOPY=llvm-objcopy \
+          OBJDUMP=llvm-objdump \
+          STRIP=llvm-strip \
+          CLANG_TRIPLE=aarch64-linux-android- \
+          CROSS_COMPILE=aarch64-linux-android- \
+          CROSS_COMPILE_ARM32=arm-linux-androideabi-
+        "
+        
+        # 7. Ejecución con los argumentos incrustados directamente para anular la detección automática de GCC antiguo
+        make O=out $BUILD_ARGS miatoll_defconfig
+        make -j$(nproc --all) O=out $BUILD_ARGS
 
     - name: Check kernel output files
       run: |
