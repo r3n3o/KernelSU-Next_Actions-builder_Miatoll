@@ -1,11 +1,11 @@
-name: Build LineageOS 22.2 Miatoll Kernel with NetHunter & KernelSU-Next
+name: Build LineageOS Miatoll Kernel
 on:
   workflow_dispatch:
 env:
   TZ: America/New_York
 jobs:
   build:
-    name: Build Kernel for Miatoll by ${{ github.actor }}
+    name: Build Kernel for Miatoll
     runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4
@@ -17,20 +17,15 @@ jobs:
     
     - name: Setup build kernel environment
       run: |
-        echo "BUILD_TIME=$(TZ=America/New_York date "+%y%m%d")" >> $GITHUB_ENV
-        echo "BUILD_TIME_1=$(TZ=America/New_York date "+%Y-%m-%d")" >> $GITHUB_ENV
         sudo apt-get update
         sudo apt-get install git ccache automake flex lzop bison gperf build-essential zip curl zlib1g-dev g++-multilib bzip2 libbz2-dev liblz4-tool make squashfs-tools dpkg-dev libssl-dev python3 bc libc6-dev-i386 libncurses5-dev
         mkdir -p $GITHUB_WORKSPACE/kernel_workspace
-        - name: Download Clang from aosp
+        - name: Download Clang and Gcc Toolchains
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
-        git clone https://gitlab.com/crdroidandroid/android_prebuilts_clang_host_linux-x86_clang-r487747c clang-aosp --depth=1
-        - name: Download Gcc from aosp
-      run: |
-        cd $GITHUB_WORKSPACE/kernel_workspace
-        git clone https://gitlab.com/crdroidandroid/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 gcc-64 --depth=1
-        git clone https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9 gcc-32 --depth=1
+        git clone https://gitlab.com clang-aosp --depth=1
+        git clone https://gitlab.com gcc-64 --depth=1
+        git clone https://github.com gcc-32 --depth=1
         - name: Download kernel source (Miatoll Android 16)
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
@@ -41,18 +36,16 @@ jobs:
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         rm -rf KernelSU-Next
-        curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
+        curl -LSs "https://githubusercontent.com" | bash -s next
         KSU_VERSION=$(cd KernelSU-Next && expr $(/usr/bin/git rev-list --count HEAD) + 10200)
         echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
     - name: Inject NetHunter & AOSP Aisolation Patches
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-        # 1. CORE KALI (EVITA CUELGUES DE METASPLOIT/POSTGRESQL)
         echo "CONFIG_SYSVIPC=y" >> arch/arm64/configs/miatoll_defconfig
         echo "CONFIG_SYSVIPC_SYSCTL=y" >> arch/arm64/configs/miatoll_defconfig
         echo "CONFIG_MODULES=y" >> arch/arm64/configs/miatoll_defconfig
         echo "CONFIG_MODULE_UNLOAD=y" >> arch/arm64/configs/miatoll_defconfig
-        # 2. WI-FI MODO MONITOR E INYECCIÓN (ALFA / REALTEK / MEDIATEK)
         echo "CONFIG_WIRELESS=y" >> arch/arm64/configs/miatoll_defconfig
         echo "CONFIG_CFG80211=m" >> arch/arm64/configs/miatoll_defconfig
         echo "CONFIG_MAC80211=m" >> arch/arm64/configs/miatoll_defconfig
@@ -62,11 +55,9 @@ jobs:
         echo "CONFIG_RTL8187=m" >> arch/arm64/configs/miatoll_defconfig
         echo "CONFIG_RT2X00=m" >> arch/arm64/configs/miatoll_defconfig
         echo "CONFIG_RT2800USB=m" >> arch/arm64/configs/miatoll_defconfig
-        # 3. PERIFÉRICOS HID (ATAQUES BADUSB / TECLADO FALSO)
         echo "CONFIG_USB_G_ANDROID=y" >> arch/arm64/configs/miatoll_defconfig
         echo "CONFIG_USB_F_HID=y" >> arch/arm64/configs/miatoll_defconfig
         echo "CONFIG_USB_CONFIGFS_F_HID=y" >> arch/arm64/configs/miatoll_defconfig
-        # 4. PRIVACIDAD Y CONTENEDORES (ESTILO GRAPHENE EN ANDROID 16)
         echo "CONFIG_NAMESPACES=y" >> arch/arm64/configs/miatoll_defconfig
         echo "CONFIG_USER_NS=y" >> arch/arm64/configs/miatoll_defconfig
         echo "CONFIG_PID_NS=y" >> arch/arm64/configs/miatoll_defconfig
@@ -100,7 +91,7 @@ jobs:
       if: env.CHECK_IMAGE == 'true'
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
-        git clone https://github.com/JacoaFur/AnyKernel3-Fork --depth=1 AnyKernel3
+        git clone https://github.com --depth=1 AnyKernel3
         if [ -f android-kernel/out/arch/arm64/boot/Image.gz-dtb ]; then
             cp android-kernel/out/arch/arm64/boot/Image.gz-dtb AnyKernel3/Image.gz-dtb
         else
@@ -111,5 +102,5 @@ jobs:
       if: env.CHECK_IMAGE == 'true'
       uses: actions/upload-artifact@v4
       with:
-        name: AK3-Miatoll-NetHunter-KSU_${{ env.KSUVER }}-${{ env.BUILD_TIME }}
+        name: AK3-Miatoll-NetHunter-KSU
         path: kernel_workspace/AnyKernel3/*
