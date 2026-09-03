@@ -1,12 +1,9 @@
 name: Build Miatoll Hacking Kernel V2
-
 on:
   workflow_dispatch:
-
 env:
   TZ: America/New_York
   ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
-
 jobs:
   build:
     name: Build Kernel for Miatoll
@@ -34,32 +31,25 @@ jobs:
     - name: Download Official Android Toolchains
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
-        
-        # Clonamos el Clang oficial de Google AOSP con la ruta correcta
-        git clone https://googlesource.com --depth=1 -b master clang-aosp
-        
-        # Clonamos los GCC oficiales de LineageOS para enlazado secundario
-        git clone https://github.com --depth=1 gcc-64
-        git clone https://github.com --depth=1 gcc-32
+        git clone https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 --depth=1 -b master clang-aosp
+        git clone https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 --depth=1 gcc-64
+        git clone https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9 --depth=1 gcc-32
 
     - name: Download kernel source
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
-        # Clonación limpia de crDroid rama 16.0 para Miatoll
-        git clone https://github.com -b 16.0 android-kernel --depth=1
+        git clone https://github.com/crdroidandroid/android_kernel_xiaomi_sm7125 -b 16.0 android-kernel --depth=1
         cd android-kernel/scripts
         sed -i 's/ -dirty//g' setlocalversion
 
     - name: Setup Official KernelSU
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-        # Inyección oficial de KernelSU mediante su script nativo de sincronización
-        curl -LSs "https://githubusercontent.com" | bash -s main
+        curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s main
 
     - name: Inject NetHunter Patches into Defconfig
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-        # Forzamos la habilitación de los módulos de inyección de paquetes de NetHunter en el archivo base
         DEFCONFIG="arch/arm64/configs/miatoll_defconfig"
         echo "CONFIG_SYSVIPC=y" >> $DEFCONFIG
         echo "CONFIG_SYSVIPC_SYSCTL=y" >> $DEFCONFIG
@@ -86,22 +76,13 @@ jobs:
     - name: Build Miatoll kernel
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-        
-        # Buscamos dinámicamente la carpeta binaria ejecutable de Clang dentro del pack de Google
         CLANG_BIN_PATH=$(find $GITHUB_WORKSPACE/kernel_workspace/clang-aosp -name "clang" -type f -path "*/bin/*" | head -n 1 | sed 's/\/clang//')
-        
-        # 1. Configuración estricta de arquitecturas cruzadas (SUBARCH=arm habilita compat_uptr_t nativo)
         export ARCH=arm64
         export SUBARCH=arm
-        
-        # 2. Registramos las rutas de las tres toolchains en el PATH global ordenadamente
-        export PATH="$CLANG_BIN_PATH:$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-32/bin:$PATH"
-        
-        # 3. Datos informativos de compilación
+        export PATH="${CLANG_BIN_PATH}:${GITHUB_WORKSPACE}/kernel_workspace/gcc-64/bin:${GITHUB_WORKSPACE}/kernel_workspace/gcc-32/bin:${PATH}"
         export KBUILD_BUILD_HOST=Github-Action
         export KBUILD_BUILD_USER=$(echo ${{ github.actor }} | tr A-Z a-z)
         
-        # 4. Parámetros de construcción cruzada estándar de Android AOSP
         CC_ARGS="
           ARCH=arm64 \
           CC=clang \
@@ -115,8 +96,6 @@ jobs:
           OBJDUMP=llvm-objdump \
           STRIP=llvm-strip
         "
-        
-        # 5. Ejecución secuencial limpia
         make O=out $CC_ARGS miatoll_defconfig
         make -j$(nproc --all) O=out $CC_ARGS
 
@@ -125,7 +104,6 @@ jobs:
         cd $GITHUB_WORKSPACE/kernel_workspace
         BOOT_DIR="android-kernel/out/arch/arm64/boot"
         FOUND_IMG=""
-        
         for f in Image.gz-dtb Image.gz Image Image-dtb; do
             if [ -f "$BOOT_DIR/$f" ]; then
                 FOUND_IMG="$BOOT_DIR/$f"
@@ -133,7 +111,6 @@ jobs:
                 break
             fi
         done
-        
         if [ -n "$FOUND_IMG" ]; then
             echo "✅ ¡Kernel detectado con éxito en: $FOUND_IMG!"
             echo "CHECK_IMAGE=true" >> $GITHUB_ENV
@@ -146,12 +123,10 @@ jobs:
       if: env.CHECK_IMAGE == 'true'
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
-        git clone https://github.com --depth=1 AnyKernel3
-        
+        git clone https://github.com/osm0sis/AnyKernel3 --depth=1 AnyKernel3
         cp android-kernel/out/arch/arm64/boot/${{ env.KERNEL_FILE_NAME }} AnyKernel3/${{ env.KERNEL_FILE_NAME }}
         sed -i "s/kernel.string=.*/kernel.string=Miatoll Hacking Kernel por ${{ github.actor }}/g" AnyKernel3/anykernel.sh
         rm -rf AnyKernel3/.git* AnyKernel3/README.md
-        
         cd AnyKernel3
         zip -r9 ../Miatoll-NetHunter-Kernel.zip *
 
