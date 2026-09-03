@@ -24,14 +24,19 @@ jobs:
         sudo apt-get install git ccache automake flex lzop bison gperf build-essential zip curl zlib1g-dev g++-multilib bzip2 libbz2-dev liblz4-tool make squashfs-tools dpkg-dev libssl-dev python3 bc libc6-dev-i386 libncurses5-dev
         mkdir -p $GITHUB_WORKSPACE/kernel_workspace
     
-    - name: Download Toolchains (GitHub Mirrors Corregidos)
+    - name: Download Toolchains (Variables Protegidas)
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
-        # Descarga de Proton-Clang oficial (Optimizado para optimización de Kernel en Android)
-        git clone https://github.com --depth=1 clang-aosp
-        # Descarga de GCC para arquitecturas de 64 y 32 bits desde los servidores de LineageOS
-        git clone https://github.com --depth=1 gcc-64
-        git clone https://github.com --depth=1 gcc-32
+        
+        # Declaración explícita de URLs completas para evitar recortes del sistema
+        URL_CLANG="https://github.com"
+        URL_GCC64="https://github.com"
+        URL_GCC32="https://github.com"
+        
+        # Ejecución de clonación inyectando las variables blindadas
+        git clone "$URL_CLANG" --depth=1 clang-aosp
+        git clone "$URL_GCC64" --depth=1 gcc-64
+        git clone "$URL_GCC32" --depth=1 gcc-32
     
     - name: Download kernel source
       run: |
@@ -117,3 +122,4 @@ jobs:
       with:
         name: AK3-Miatoll-NetHunter-KSU
         path: kernel_workspace/AnyKernel3/*
+        
