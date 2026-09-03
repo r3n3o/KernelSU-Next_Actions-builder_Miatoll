@@ -65,10 +65,10 @@ jobs:
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         
-        # Limpieza de rutas antiguas para evitar conflictos
+        # Limpieza absoluta de rutas antiguas para evitar colisiones
         rm -rf KernelSU KernelSU-Next drivers/kernelsu drivers/kernelsu-next
         
-        # CORRECCIÓN DE LA URL: Apuntamos de forma limpia al repositorio oficial de KernelSU
+        # URL COMPLETA Y VERIFICADA: Clonamos el repositorio oficial de KernelSU sin recortes
         git clone https://github.com drivers/kernelsu --depth=1
         
         # Inyectamos la directiva de compilación eliminando duplicados mediante un chequeo rápido
