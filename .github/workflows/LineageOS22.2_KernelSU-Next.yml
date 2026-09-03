@@ -56,11 +56,17 @@ jobs:
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel/scripts
         sed -i 's/ -dirty//g' setlocalversion
 
-    - name: Setup KernelSU Next
+    - name: Setup KernelSU Next (URL Cifrada y Protegida)
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         rm -rf KernelSU-Next
-        curl -LSs "https://githubusercontent.com" | bash -s next
+        
+        # Cadena cifrada para evitar la mutilación del script de instalación de KernelSU-Next
+        KSU_SCRIPT_B64="aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL3JpZnN4ZC9LZXJuZWxTVS1OZXh0L25leHQva2VybmVsL3NldHVwLnNo"
+        URL_KSU_SCRIPT=$(echo "$KSU_SCRIPT_B64" | base64 --decode)
+        
+        # Descarga y ejecución limpia del instalador
+        curl -LSs "$URL_KSU_SCRIPT" | bash -s next
         KSU_VERSION=$(cd KernelSU-Next && expr $(/usr/bin/git rev-list --count HEAD) + 10200)
         echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
 
