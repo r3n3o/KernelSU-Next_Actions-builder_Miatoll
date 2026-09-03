@@ -99,35 +99,33 @@ jobs:
         echo "CONFIG_PID_NS=y" >> arch/arm64/configs/miatoll_defconfig
         echo "CONFIG_NET_NS=y" >> arch/arm64/configs/miatoll_defconfig
         echo "CONFIG_BLK_DEV_LOOP=y" >> arch/arm64/configs/miatoll_defconfig
+        
+        # Parche directo al bug de CPUS del tracepoint de Qualcomm
+        echo "CONFIG_SCHED_INFO=n" >> arch/arm64/configs/miatoll_defconfig
 
     - name: Build Miatoll kernel
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         
-        # REEMPLAZO LIMPIO: Convertimos la directiva de error en un comentario inofensivo de Makefile (#)
+        # Reemplazo limpio contra la condicional estricta del CLANG_TRIPLE
         find . -type f -name "Makefile*" -exec sed -i 's/$(error "Clang with Android --target detected.*/# Bypass Clang/g' {} +
         find . -type f -name "*.mk" -exec sed -i 's/$(error "Clang with Android --target detected.*/# Bypass Clang/g' {} +
         
-        # Definición del directorio absoluto de Clang
         CLANG_DIR="$GITHUB_WORKSPACE/kernel_workspace/clang-aosp"
         
-        # 1. Variables de entorno obligatorias para el compilador cruzado
+        # 1. Ajuste clave: Volvemos a SUBARCH=arm para mapear las cabeceras de red de 32 bits (Bypass compat_uptr_t)
         export ARCH=arm64
-        export SUBARCH=arm64
+        export SUBARCH=arm
         export LD_LIBRARY_PATH=$GITHUB_WORKSPACE/kernel_workspace/lib_compat:$LD_LIBRARY_PATH
-        
-        # PROTECCIÓN DE ENLAZADOR: Sacamos a Clang del PATH global y solo incluimos GCC para evitar el conflicto .relr.dyn
         export PATH=$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-32/bin:$PATH
         
-        # 2. Metadatos de la compilación
+        # 2. Metadatos
         export KBUILD_BUILD_HOST=Github-Action
         export KBUILD_BUILD_USER=$(echo ${{ github.actor }} | tr A-Z a-z)
-        
-        # 3. Forzar al compilador local a usar estrictamente las librerías nativas del Host
         export HOSTCC=gcc
         export HOSTCXX=g++
         
-        # 4. Parámetros explícitos direccionados a las rutas exactas de Proton Clang
+        # 3. Argumentos explícitos para Proton Clang
         CC_ARGS="
           CC=$CLANG_DIR/bin/clang \
           LD=$CLANG_DIR/bin/ld.lld \
@@ -141,15 +139,15 @@ jobs:
           CROSS_COMPILE_ARM32=arm-linux-gnueabi-
         "
         
-        # 5. Ejecución del miatoll_defconfig
+        # 4. Generación del defconfig
         make O=out ARCH=arm64 $CC_ARGS miatoll_defconfig
         
-        # Limpieza secundaria si se generó un Makefile interno en out/
+        # Limpieza secundaria interna en out/
         if [ -d "out" ]; then
             find out/ -type f -name "Makefile*" -exec sed -i 's/$(error "Clang with Android --target detected.*/# Bypass Clang/g' {} +
         fi
         
-        # 6. Compilación definitiva del núcleo utilizando hilos en paralelo
+        # 5. Compilación del núcleo
         make -j$(nproc --all) O=out ARCH=arm64 $CC_ARGS
 
     - name: Check kernel output files
@@ -181,7 +179,7 @@ jobs:
         fi
         rm -rf AnyKernel3/.git* AnyKernel3/README.md
         
-        # Generación del archivo comprimido listo para flashear
+        # Generación del archivo comprimido
         cd AnyKernel3
         zip -r9 ../Miatoll-NetHunter-Kernel.zip *
 
