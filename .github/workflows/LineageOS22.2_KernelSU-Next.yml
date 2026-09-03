@@ -28,25 +28,31 @@ jobs:
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
         
-        # Cadenas cifradas en Base64 para proteger las URLs originales de cualquier alteración
+        # Cadenas cifradas en Base64 para proteger las URLs de las Toolchains
         CLANG_B64="aHR0cHM6Ly9naXRodWIuY29tL2tkcmFnMG4vcHJvdG9uLWNsYW5nLmdpdA=="
         GCC64_B64="aHR0cHM6Ly9naXRodWIuY29tL0xpbmVhZ2VPUy9hbmRyb2lkX3ByZWJ1aWx0c19nY2NfbGludXgteDg2X2FhcmNoNjRfYWFyY2g2NC1saW51eC1hbmRyb2lkLTQuOS5naXQ="
         GCC32_B64="aHR0cHM6Ly9naXRodWIuY29tL0xpbmVhZ2VPUy9hbmRyb2lkX3ByZWJ1aWx0c19nY2NfbGludXgteDg2X2FybV9hcm0tbGludXgtYW5kcm9pZGVhYmktNC45LmdpdA=="
         
-        # Decodificación directa en la memoria del servidor Linux
+        # Decodificación directa en memoria
         URL_CLANG=$(echo "$CLANG_B64" | base64 --decode)
         URL_GCC64=$(echo "$GCC64_B64" | base64 --decode)
         URL_GCC32=$(echo "$GCC32_B64" | base64 --decode)
         
-        # Clonación limpia y segura con paths completos e inmutables
+        # Clonación limpia
         git clone "$URL_CLANG" --depth=1 clang-aosp
         git clone "$URL_GCC64" --depth=1 gcc-64
         git clone "$URL_GCC32" --depth=1 gcc-32
     
-    - name: Download kernel source
+    - name: Download kernel source (Ruta Protegida)
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
-        git clone --recursive https://github.com -b 16.0 android-kernel --depth=1
+        
+        # Cadena cifrada para la URL oficial del Kernel de Miatoll Android 16
+        KERNEL_B64="aHR0cHM6Ly9naXRodWIuY29tL2NyZHJvaWRhbmRyb2lkL2FuZHJvaWRfa2VybmVsX3hpYW9taV9zbTYyNTAuZ2l0"
+        URL_KERNEL=$(echo "$KERNEL_B64" | base64 --decode)
+        
+        # Clonación del código fuente
+        git clone --recursive "$URL_KERNEL" -b 16.0 android-kernel --depth=1
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel/scripts
         sed -i 's/ -dirty//g' setlocalversion
 
@@ -113,7 +119,12 @@ jobs:
       if: env.CHECK_IMAGE == 'true'
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
-        git clone https://github.com --depth=1 AnyKernel3
+        
+        # Cadena cifrada para evitar recortes en la descarga de AnyKernel3
+        AK3_B64="aHR0cHM6Ly9naXRodWIuY29tL0phY29hRnVyL0FueUtlcm5lbDMtRm9yay5naXQ="
+        URL_AK3=$(echo "$AK3_B64" | base64 --decode)
+        
+        git clone "$URL_AK3" --depth=1 AnyKernel3
         if [ -f android-kernel/out/arch/arm64/boot/Image.gz-dtb ]; then
             cp android-kernel/out/arch/arm64/boot/Image.gz-dtb AnyKernel3/Image.gz-dtb
         else
