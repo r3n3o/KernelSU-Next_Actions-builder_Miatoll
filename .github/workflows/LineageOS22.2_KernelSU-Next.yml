@@ -1,4 +1,4 @@
-name: Build Miatoll Hacking Kernel V10 (Proton Clang + BPF JIT)
+name: Build Miatoll Hacking Kernel V12 (crDroid Native Toolchain)
 on:
   workflow_dispatch:
 env:
@@ -22,10 +22,13 @@ jobs:
         sudo apt-get install -y git ccache automake flex lzop bison gperf build-essential zip curl zlib1g-dev g++-multilib bzip2 libbz2-dev liblz4-tool make squashfs-tools dpkg-dev libssl-dev python3 libelf-dev bc libc6-dev-i386 gcc-multilib lld llvm
         mkdir -p $GITHUB_WORKSPACE/kernel_workspace
 
-    - name: Download Proton Clang Toolchain
+    - name: Download crDroid Specific Toolchains
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
-        git clone https://github.com/kdrag0n/proton-clang --depth=1
+        # Descargamos EXACTAMENTE las herramientas que dicta el build.sh original de crDroid 16.0
+        git clone --depth=1 https://github.com/crdroidandroid/android_prebuilts_clang_host_linux-x86_clang-6443078 clang
+        git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 gcc64
+        git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9 gcc32
 
     - name: Download kernel source
       run: |
@@ -39,26 +42,12 @@ jobs:
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s main
 
-    - name: Inject NetHunter, CPU, BPF & JIT Patches into Defconfig
+    - name: Inject NetHunter Patches into Native Defconfig
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-        DEFCONFIG="arch/arm64/configs/miatoll_defconfig"
+        # Usamos la ruta real del defconfig dictada por el build.sh
+        DEFCONFIG="arch/arm64/configs/vendor/xiaomi/miatoll_defconfig"
         
-        # 1. Parches de Compatibilidad de Arquitectura
-        echo "CONFIG_NR_CPUS=8" >> $DEFCONFIG
-        echo "CONFIG_COMPAT=y" >> $DEFCONFIG
-        
-        # 2. Parches BPF Base
-        echo "CONFIG_BPF=y" >> $DEFCONFIG
-        echo "CONFIG_BPF_SYSCALL=y" >> $DEFCONFIG
-        echo "CONFIG_BPF_EVENTS=y" >> $DEFCONFIG
-        
-        # 3. Parches JIT para evitar el error de bpf_jit_blinding_enabled
-        echo "CONFIG_BPF_JIT=y" >> $DEFCONFIG
-        echo "CONFIG_BPF_JIT_ALWAYS_ON=y" >> $DEFCONFIG
-        echo "CONFIG_HAVE_EBPF_JIT=y" >> $DEFCONFIG
-        
-        # 4. Parches de Kali NetHunter
         echo "CONFIG_SYSVIPC=y" >> $DEFCONFIG
         echo "CONFIG_SYSVIPC_SYSCTL=y" >> $DEFCONFIG
         echo "CONFIG_MODULES=y" >> $DEFCONFIG
@@ -85,28 +74,25 @@ jobs:
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         
-        export PATH="${GITHUB_WORKSPACE}/kernel_workspace/proton-clang/bin:${PATH}"
         export ARCH=arm64
-        export SUBARCH=arm
         export KBUILD_BUILD_HOST=Github-Action
         export KBUILD_BUILD_USER=$(echo ${{ github.actor }} | tr A-Z a-z)
         
+        # Replicamos el PATH exacto del script original
+        export PATH="${GITHUB_WORKSPACE}/kernel_workspace/clang/bin:${PATH}:${GITHUB_WORKSPACE}/kernel_workspace/gcc32/bin:${PATH}:${GITHUB_WORKSPACE}/kernel_workspace/gcc64/bin:${PATH}"
+        
+        # Argumentos nativos extraídos directamente del build.sh
         CC_ARGS="
           ARCH=arm64 \
           CC=clang \
-          LLVM=1 \
-          LLVM_IAS=1 \
-          CROSS_COMPILE=aarch64-linux-gnu- \
-          CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
-          LD=${GITHUB_WORKSPACE}/kernel_workspace/proton-clang/bin/ld.lld \
-          AR=llvm-ar \
-          NM=llvm-nm \
-          OBJCOPY=llvm-objcopy \
-          OBJDUMP=llvm-objdump \
-          STRIP=llvm-strip
+          CLANG_TRIPLE=aarch64-linux-gnu- \
+          CROSS_COMPILE=${GITHUB_WORKSPACE}/kernel_workspace/gcc64/bin/aarch64-linux-android- \
+          CROSS_COMPILE_ARM32=${GITHUB_WORKSPACE}/kernel_workspace/gcc32/bin/arm-linux-androideabi- \
+          LD=ld.lld \
+          CONFIG_NO_ERROR_ON_MISMATCH=y
         "
         
-        make O=out $CC_ARGS miatoll_defconfig
+        make O=out $CC_ARGS vendor/xiaomi/miatoll_defconfig
         make -j$(nproc --all) O=out $CC_ARGS
 
     - name: Check and Locate Kernel Output Files
