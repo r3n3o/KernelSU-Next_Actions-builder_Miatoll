@@ -1,4 +1,4 @@
-name: Build Miatoll Hacking Kernel V8 (Proton Clang + Config Fix)
+name: Build Miatoll Hacking Kernel V9 (Proton Clang + BPF Fix)
 on:
   workflow_dispatch:
 env:
@@ -39,16 +39,21 @@ jobs:
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s main
 
-    - name: Inject NetHunter & Fix Patches into Defconfig
+    - name: Inject NetHunter, CPU & BPF Patches into Defconfig
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         DEFCONFIG="arch/arm64/configs/miatoll_defconfig"
         
-        # Parches para solucionar los errores de Proton Clang en código heredado
+        # 1. Parches de Compatibilidad de Arquitectura (C y Tracepoints)
         echo "CONFIG_NR_CPUS=8" >> $DEFCONFIG
         echo "CONFIG_COMPAT=y" >> $DEFCONFIG
         
-        # Parches de NetHunter
+        # 2. Parches BPF (Fix para bpf_stats_handler sugerido por el Agente)
+        echo "CONFIG_BPF=y" >> $DEFCONFIG
+        echo "CONFIG_BPF_SYSCALL=y" >> $DEFCONFIG
+        echo "CONFIG_BPF_EVENTS=y" >> $DEFCONFIG
+        
+        # 3. Parches de Kali NetHunter
         echo "CONFIG_SYSVIPC=y" >> $DEFCONFIG
         echo "CONFIG_SYSVIPC_SYSCTL=y" >> $DEFCONFIG
         echo "CONFIG_MODULES=y" >> $DEFCONFIG
@@ -81,7 +86,6 @@ jobs:
         export KBUILD_BUILD_HOST=Github-Action
         export KBUILD_BUILD_USER=$(echo ${{ github.actor }} | tr A-Z a-z)
         
-        # Mantenemos LLVM_IAS=1 para evadir el error -EL del ensamblador de Ubuntu
         CC_ARGS="
           ARCH=arm64 \
           CC=clang \
