@@ -1,4 +1,4 @@
-name: Build Miatoll Hacking Kernel V9 (Proton Clang + BPF Fix)
+name: Build Miatoll Hacking Kernel V10 (Proton Clang + BPF JIT)
 on:
   workflow_dispatch:
 env:
@@ -39,21 +39,26 @@ jobs:
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s main
 
-    - name: Inject NetHunter, CPU & BPF Patches into Defconfig
+    - name: Inject NetHunter, CPU, BPF & JIT Patches into Defconfig
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         DEFCONFIG="arch/arm64/configs/miatoll_defconfig"
         
-        # 1. Parches de Compatibilidad de Arquitectura (C y Tracepoints)
+        # 1. Parches de Compatibilidad de Arquitectura
         echo "CONFIG_NR_CPUS=8" >> $DEFCONFIG
         echo "CONFIG_COMPAT=y" >> $DEFCONFIG
         
-        # 2. Parches BPF (Fix para bpf_stats_handler sugerido por el Agente)
+        # 2. Parches BPF Base
         echo "CONFIG_BPF=y" >> $DEFCONFIG
         echo "CONFIG_BPF_SYSCALL=y" >> $DEFCONFIG
         echo "CONFIG_BPF_EVENTS=y" >> $DEFCONFIG
         
-        # 3. Parches de Kali NetHunter
+        # 3. Parches JIT para evitar el error de bpf_jit_blinding_enabled
+        echo "CONFIG_BPF_JIT=y" >> $DEFCONFIG
+        echo "CONFIG_BPF_JIT_ALWAYS_ON=y" >> $DEFCONFIG
+        echo "CONFIG_HAVE_EBPF_JIT=y" >> $DEFCONFIG
+        
+        # 4. Parches de Kali NetHunter
         echo "CONFIG_SYSVIPC=y" >> $DEFCONFIG
         echo "CONFIG_SYSVIPC_SYSCTL=y" >> $DEFCONFIG
         echo "CONFIG_MODULES=y" >> $DEFCONFIG
