@@ -1,4 +1,4 @@
-name: Build Miatoll Hacking Kernel V7 (Ubuntu 22.04 + Proton Puro)
+name: Build Miatoll Hacking Kernel V8 (Proton Clang + Config Fix)
 on:
   workflow_dispatch:
 env:
@@ -7,7 +7,6 @@ env:
 jobs:
   build:
     name: Build Kernel for Miatoll
-    # LA OPCIÓN 3 DEL AGENTE: Bajamos a Ubuntu 22.04 para compatibilidad nativa perfecta
     runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v4.2.2
@@ -26,7 +25,6 @@ jobs:
     - name: Download Proton Clang Toolchain
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
-        # Única herramienta a descargar. Adiós a AOSP y GCC.
         git clone https://github.com/kdrag0n/proton-clang --depth=1
 
     - name: Download kernel source
@@ -41,10 +39,16 @@ jobs:
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s main
 
-    - name: Inject NetHunter Patches into Defconfig
+    - name: Inject NetHunter & Fix Patches into Defconfig
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         DEFCONFIG="arch/arm64/configs/miatoll_defconfig"
+        
+        # Parches para solucionar los errores de Proton Clang en código heredado
+        echo "CONFIG_NR_CPUS=8" >> $DEFCONFIG
+        echo "CONFIG_COMPAT=y" >> $DEFCONFIG
+        
+        # Parches de NetHunter
         echo "CONFIG_SYSVIPC=y" >> $DEFCONFIG
         echo "CONFIG_SYSVIPC_SYSCTL=y" >> $DEFCONFIG
         echo "CONFIG_MODULES=y" >> $DEFCONFIG
@@ -77,7 +81,7 @@ jobs:
         export KBUILD_BUILD_HOST=Github-Action
         export KBUILD_BUILD_USER=$(echo ${{ github.actor }} | tr A-Z a-z)
         
-        # Integración estricta de Proton y banderas LLVM para evitar el error de ensamblador de Ubuntu
+        # Mantenemos LLVM_IAS=1 para evadir el error -EL del ensamblador de Ubuntu
         CC_ARGS="
           ARCH=arm64 \
           CC=clang \
