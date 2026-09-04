@@ -1,4 +1,4 @@
-name: Build Miatoll Hacking Kernel V12 (crDroid Native Toolchain)
+name: Build Miatoll Hacking Kernel V13 (NetHunter WiFi Fix)
 on:
   workflow_dispatch:
 env:
@@ -25,7 +25,6 @@ jobs:
     - name: Download crDroid Specific Toolchains
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
-        # Descargamos EXACTAMENTE las herramientas que dicta el build.sh original de crDroid 16.0
         git clone --depth=1 https://github.com/crdroidandroid/android_prebuilts_clang_host_linux-x86_clang-6443078 clang
         git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 gcc64
         git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9 gcc32
@@ -45,25 +44,36 @@ jobs:
     - name: Inject NetHunter Patches into Native Defconfig
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-        # Usamos la ruta real del defconfig dictada por el build.sh
         DEFCONFIG="arch/arm64/configs/vendor/xiaomi/miatoll_defconfig"
         
+        # Parches IPC
         echo "CONFIG_SYSVIPC=y" >> $DEFCONFIG
         echo "CONFIG_SYSVIPC_SYSCTL=y" >> $DEFCONFIG
+        
+        # Parches Base de Módulos
         echo "CONFIG_MODULES=y" >> $DEFCONFIG
         echo "CONFIG_MODULE_UNLOAD=y" >> $DEFCONFIG
+        
+        # --- SOLUCIÓN DEL CONFLICTO DE ENLAZADO WIFI ---
+        # Forzamos la red a compilarse dentro del núcleo (=y) en vez de módulo (=m)
         echo "CONFIG_WIRELESS=y" >> $DEFCONFIG
-        echo "CONFIG_CFG80211=m" >> $DEFCONFIG
-        echo "CONFIG_MAC80211=m" >> $DEFCONFIG
+        echo "CONFIG_CFG80211=y" >> $DEFCONFIG
+        echo "CONFIG_MAC80211=y" >> $DEFCONFIG
         echo "CONFIG_CFG80211_WEXT=y" >> $DEFCONFIG
+        
+        # Drivers de tarjetas externas NetHunter (se mantienen como módulos)
         echo "CONFIG_ATH_CARDS=m" >> $DEFCONFIG
         echo "CONFIG_ATH9K_HTC=m" >> $DEFCONFIG
         echo "CONFIG_RTL8187=m" >> $DEFCONFIG
         echo "CONFIG_RT2X00=m" >> $DEFCONFIG
         echo "CONFIG_RT2800USB=m" >> $DEFCONFIG
+        
+        # Parches USB y Emulación
         echo "CONFIG_USB_G_ANDROID=y" >> $DEFCONFIG
         echo "CONFIG_USB_F_HID=y" >> $DEFCONFIG
         echo "CONFIG_USB_CONFIGFS_F_HID=y" >> $DEFCONFIG
+        
+        # Aislamiento de Namespaces (Docker/Chroot)
         echo "CONFIG_NAMESPACES=y" >> $DEFCONFIG
         echo "CONFIG_USER_NS=y" >> $DEFCONFIG
         echo "CONFIG_PID_NS=y" >> $DEFCONFIG
@@ -78,10 +88,8 @@ jobs:
         export KBUILD_BUILD_HOST=Github-Action
         export KBUILD_BUILD_USER=$(echo ${{ github.actor }} | tr A-Z a-z)
         
-        # Replicamos el PATH exacto del script original
         export PATH="${GITHUB_WORKSPACE}/kernel_workspace/clang/bin:${PATH}:${GITHUB_WORKSPACE}/kernel_workspace/gcc32/bin:${PATH}:${GITHUB_WORKSPACE}/kernel_workspace/gcc64/bin:${PATH}"
         
-        # Argumentos nativos extraídos directamente del build.sh
         CC_ARGS="
           ARCH=arm64 \
           CC=clang \
