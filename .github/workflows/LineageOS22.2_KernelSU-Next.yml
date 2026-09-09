@@ -138,15 +138,11 @@ jobs:
           git clone https://github.com/osm0sis/AnyKernel3 --depth=1 AnyKernel3
           cp android-kernel/out/arch/arm64/boot/$KERNEL_FILE_NAME AnyKernel3/$KERNEL_FILE_NAME
 
-          cat << 'EOF_PYTHON' > AnyKernel3/generate_ak3.py
-          import os
-
-          actor = os.environ.get('GITHUB_ACTOR', 'User')
-
-          ak3_content = """# AnyKernel3 Script para Miatoll (Qualcomm SM6250)
+          cat << 'EOF' > AnyKernel3/anykernel.sh
+          # AnyKernel3 Script para Miatoll (Qualcomm SM6250)
 
           properties() { '
-          kernel.string=Miatoll NetHunter Kernel por """ + actor + """
+          kernel.string=Miatoll NetHunter Kernel por ${{ github.actor }}
           do.devicecheck=0
           do.modules=0
           do.systemless=1
@@ -165,10 +161,10 @@ jobs:
           block=""
           for dev in /dev/block/by-name/boot /dev/block/bootdevice/by-name/boot /dev/block/platform/soc/1d84000.ufshc/by-name/boot /dev/block/platform/soc/7c40000.sdhci/by-name/boot; do
             if [ -e "$dev" ]; then
-            block="$dev"
-             break
-              fi
-            done
+              block="$dev"
+              break
+            fi
+          done
 
           if [ -z "$block" ]; then
             block=$(find /dev/block -name boot 2>/dev/null | head -n 1)
@@ -185,19 +181,15 @@ jobs:
 
           dump_boot
           write_boot
-          """
+          EOF
 
-          with open('AnyKernel3/anykernel.sh', 'w') as f:
-          f.write(ak3_content)
-          EOF_PYTHON
-
-          python3 AnyKernel3/generate_ak3.py
+          sed -i 's/^[ \t]*//' AnyKernel3/anykernel.sh
 
           echo "=== VERIFICACIÓN DEL ARCHIVO ANYKERNEL.SH GENERADO ==="
           cat AnyKernel3/anykernel.sh
           echo "======================================================"
 
-          rm -rf AnyKernel3/.git* AnyKernel3/README.md AnyKernel3/generate_ak3.py
+          rm -rf AnyKernel3/.git* AnyKernel3/README.md
           cd AnyKernel3
           zip -r9 ../Miatoll-NetHunter-Kernel.zip *
 
@@ -206,4 +198,3 @@ jobs:
         with:
           name: AK3-Miatoll-NetHunter-KSU
           path: kernel_workspace/Miatoll-NetHunter-Kernel.zip
-
