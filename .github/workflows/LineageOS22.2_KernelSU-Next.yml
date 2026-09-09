@@ -1,178 +1,166 @@
 name: Build Miatoll Hacking Kernel V13 (NetHunter WiFi Fix)
+
 on:
   workflow_dispatch:
+
 env:
   TZ: America/New_York
   ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+
 jobs:
   build:
     name: Build Kernel for Miatoll
     runs-on: ubuntu-22.04
+
     steps:
-    - uses: actions/checkout@v4.2.2
+      - name: Checkout Repository
+        uses: actions/checkout@v4.2.2
 
-    - name: Set swap to 10G
-      uses: pierotofy/set-swap-space@master
-      with:
-        swap-size-gb: 10
+      - name: Set swap to 10G
+        uses: pierotofy/set-swap-space@master
+        with:
+          swap-size-gb: 10
 
-    - name: Setup build kernel environment
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y git ccache automake flex lzop bison gperf build-essential zip curl zlib1g-dev g++-multilib bzip2 libbz2-dev liblz4-tool make squashfs-tools dpkg-dev libssl-dev python3 libelf-dev bc libc6-dev-i386 gcc-multilib lld llvm
-        mkdir -p $GITHUB_WORKSPACE/kernel_workspace
+      - name: Setup build kernel environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git ccache automake flex lzop bison gperf build-essential zip curl zlib1g-dev g++-multilib bzip2 libbz2-dev liblz4-tool make squashfs-tools dpkg-dev libssl-dev python3 libelf-dev bc libc6-dev-i386 gcc-multilib lld llvm
+          mkdir -p $GITHUB_WORKSPACE/kernel_workspace
 
-    - name: Download crDroid Specific Toolchains
-      run: |
-        cd $GITHUB_WORKSPACE/kernel_workspace
-        git clone --depth=1 https://github.com/crdroidandroid/android_prebuilts_clang_host_linux-x86_clang-6443078 clang
-        git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 gcc64
-        git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9 gcc32
+      - name: Download crDroid Specific Toolchains
+        run: |
+          cd $GITHUB_WORKSPACE/kernel_workspace
+          git clone --depth=1 https://github.com/crdroidandroid/android_prebuilts_clang_host_linux-x86_clang-6443078 clang
+          git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 gcc64
+          git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9 gcc32
 
-    - name: Download kernel source
-      run: |
-        cd $GITHUB_WORKSPACE/kernel_workspace
-        git clone https://github.com/crdroidandroid/android_kernel_xiaomi_sm6250 -b 16.0 android-kernel --depth=1
-        cd android-kernel/scripts
-        sed -i 's/ -dirty//g' setlocalversion
+      - name: Download kernel source
+        run: |
+          cd $GITHUB_WORKSPACE/kernel_workspace
+          git clone https://github.com/crdroidandroid/android_kernel_xiaomi_sm6250 -b 16.0 android-kernel --depth=1
+          cd android-kernel/scripts
+          sed -i 's/ -dirty//g' setlocalversion
 
-    - name: Setup Official KernelSU
-      run: |
-        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-        curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s main
+      - name: Setup Official KernelSU
+        run: |
+          cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s main
 
-    - name: Inject NetHunter Patches into Native Defconfig
-      run: |
-        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-        DEFCONFIG="arch/arm64/configs/vendor/xiaomi/miatoll_defconfig"
-        
-        # Parches IPC
-        echo "CONFIG_SYSVIPC=y" >> $DEFCONFIG
-        echo "CONFIG_SYSVIPC_SYSCTL=y" >> $DEFCONFIG
-        
-        # Parches Base de Módulos
-        echo "CONFIG_MODULES=y" >> $DEFCONFIG
-        echo "CONFIG_MODULE_UNLOAD=y" >> $DEFCONFIG
-        
-        # --- SOLUCIÓN DEL CONFLICTO DE ENLAZADO WIFI ---
-        # Forzamos la red a compilarse dentro del núcleo (=y) en vez de módulo (=m)
-        echo "CONFIG_WIRELESS=y" >> $DEFCONFIG
-        echo "CONFIG_CFG80211=y" >> $DEFCONFIG
-        echo "CONFIG_MAC80211=y" >> $DEFCONFIG
-        echo "CONFIG_CFG80211_WEXT=y" >> $DEFCONFIG
-        
-        # Drivers de tarjetas externas NetHunter (se mantienen como módulos)
-        echo "CONFIG_ATH_CARDS=m" >> $DEFCONFIG
-        echo "CONFIG_ATH9K_HTC=m" >> $DEFCONFIG
-        echo "CONFIG_RTL8187=m" >> $DEFCONFIG
-        echo "CONFIG_RT2X00=m" >> $DEFCONFIG
-        echo "CONFIG_RT2800USB=m" >> $DEFCONFIG
-        
-        # Parches USB y Emulación
-        echo "CONFIG_USB_G_ANDROID=y" >> $DEFCONFIG
-        echo "CONFIG_USB_F_HID=y" >> $DEFCONFIG
-        echo "CONFIG_USB_CONFIGFS_F_HID=y" >> $DEFCONFIG
-        
-        # Aislamiento de Namespaces (Docker/Chroot)
-        echo "CONFIG_NAMESPACES=y" >> $DEFCONFIG
-        echo "CONFIG_USER_NS=y" >> $DEFCONFIG
-        echo "CONFIG_PID_NS=y" >> $DEFCONFIG
-        echo "CONFIG_NET_NS=y" >> $DEFCONFIG
-        echo "CONFIG_BLK_DEV_LOOP=y" >> $DEFCONFIG
+      - name: Inject NetHunter Patches into Native Defconfig
+        run: |
+          cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+          DEFCONFIG="arch/arm64/configs/vendor/xiaomi/miatoll_defconfig"
+          
+          # Parches IPC
+          echo "CONFIG_SYSVIPC=y" >> $DEFCONFIG
+          echo "CONFIG_SYSVIPC_SYSCTL=y" >> $DEFCONFIG
+          
+          # Parches Base de Módulos
+          echo "CONFIG_MODULES=y" >> $DEFCONFIG
+          echo "CONFIG_MODULE_UNLOAD=y" >> $DEFCONFIG
+          
+          # --- SOLUCIÓN DEL CONFLICTO DE ENLAZADO WIFI ---
+          echo "CONFIG_WIRELESS=y" >> $DEFCONFIG
+          echo "CONFIG_CFG80211=y" >> $DEFCONFIG
+          echo "CONFIG_MAC80211=y" >> $DEFCONFIG
+          echo "CONFIG_CFG80211_WEXT=y" >> $DEFCONFIG
+          
+          # Drivers de tarjetas externas NetHunter (módulos)
+          echo "CONFIG_ATH_CARDS=m" >> $DEFCONFIG
+          echo "CONFIG_ATH9K_HTC=m" >> $DEFCONFIG
+          echo "CONFIG_RTL8187=m" >> $DEFCONFIG
+          echo "CONFIG_RT2X00=m" >> $DEFCONFIG
+          echo "CONFIG_RT2800USB=m" >> $DEFCONFIG
+          
+          # Parches USB y Emulación
+          echo "CONFIG_USB_G_ANDROID=y" >> $DEFCONFIG
+          echo "CONFIG_USB_F_HID=y" >> $DEFCONFIG
+          echo "CONFIG_USB_CONFIGFS_F_HID=y" >> $DEFCONFIG
+          
+          # Aislamiento de Namespaces (Docker/Chroot)
+          echo "CONFIG_NAMESPACES=y" >> $DEFCONFIG
+          echo "CONFIG_USER_NS=y" >> $DEFCONFIG
+          echo "CONFIG_PID_NS=y" >> $DEFCONFIG
+          echo "CONFIG_NET_NS=y" >> $DEFCONFIG
+          echo "CONFIG_BLK_DEV_LOOP=y" >> $DEFCONFIG
 
-    - name: Build Miatoll kernel
-      run: |
-        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-        
-        export ARCH=arm64
-        export KBUILD_BUILD_HOST=Github-Action
-        export KBUILD_BUILD_USER=$(echo ${{ github.actor }} | tr A-Z a-z)
-        
-        export PATH="${GITHUB_WORKSPACE}/kernel_workspace/clang/bin:${PATH}:${GITHUB_WORKSPACE}/kernel_workspace/gcc32/bin:${PATH}:${GITHUB_WORKSPACE}/kernel_workspace/gcc64/bin:${PATH}"
-        
-        CC_ARGS="
-          ARCH=arm64 \
-          CC=clang \
-          CLANG_TRIPLE=aarch64-linux-gnu- \
-          CROSS_COMPILE=${GITHUB_WORKSPACE}/kernel_workspace/gcc64/bin/aarch64-linux-android- \
-          CROSS_COMPILE_ARM32=${GITHUB_WORKSPACE}/kernel_workspace/gcc32/bin/arm-linux-androideabi- \
-          LD=ld.lld \
-          CONFIG_NO_ERROR_ON_MISMATCH=y
-        "
-        
-        make O=out $CC_ARGS vendor/xiaomi/miatoll_defconfig
-        make -j$(nproc --all) O=out $CC_ARGS
+      - name: Build Miatoll kernel
+        run: |
+          cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+          
+          export ARCH=arm64
+          export KBUILD_BUILD_HOST=Github-Action
+          export KBUILD_BUILD_USER=$(echo ${{ github.actor }} | tr A-Z a-z)
+          
+          export PATH="${GITHUB_WORKSPACE}/kernel_workspace/clang/bin:${PATH}:${GITHUB_WORKSPACE}/kernel_workspace/gcc32/bin:${PATH}:${GITHUB_WORKSPACE}/kernel_workspace/gcc64/bin:${PATH}"
+          
+          CC_ARGS="
+            ARCH=arm64 \
+            CC=clang \
+            CLANG_TRIPLE=aarch64-linux-gnu- \
+            CROSS_COMPILE=${GITHUB_WORKSPACE}/kernel_workspace/gcc64/bin/aarch64-linux-android- \
+            CROSS_COMPILE_ARM32=${GITHUB_WORKSPACE}/kernel_workspace/gcc32/bin/arm-linux-androideabi- \
+            LD=ld.lld \
+            CONFIG_NO_ERROR_ON_MISMATCH=y
+          "
+          
+          make O=out $CC_ARGS vendor/xiaomi/miatoll_defconfig
+          make -j$(nproc --all) O=out $CC_ARGS
 
-    - name: Check and Locate Kernel Output Files
-      run: |
-        cd $GITHUB_WORKSPACE/kernel_workspace
-        BOOT_DIR="android-kernel/out/arch/arm64/boot"
-        FOUND_IMG=""
-        for f in Image.gz-dtb Image.gz Image Image-dtb; do
-            if [ -f "$BOOT_DIR/$f" ]; then
-                FOUND_IMG="$BOOT_DIR/$f"
-                echo "KERNEL_FILE_NAME=$f" >> $GITHUB_ENV
-                break
-            fi
-        done
-        if [ -n "$FOUND_IMG" ]; then
-            echo "✅ ¡Kernel detectado con éxito en: $FOUND_IMG!"
-            echo "CHECK_IMAGE=true" >> $GITHUB_ENV
-        else
-            echo "🚨 ERROR: No se encontró ningún binario Image válido en $BOOT_DIR"
-            exit 1
-        fi
+      - name: Check and Locate Kernel Output Files
+        run: |
+          cd $GITHUB_WORKSPACE/kernel_workspace
+          BOOT_DIR="android-kernel/out/arch/arm64/boot"
+          FOUND_IMG=""
+          for f in Image.gz-dtb Image.gz Image Image-dtb; do
+              if [ -f "$BOOT_DIR/$f" ]; then
+                  FOUND_IMG="$BOOT_DIR/$f"
+                  echo "KERNEL_FILE_NAME=$f" >> $GITHUB_ENV
+                  break
+              fi
+          done
+          if [ -n "$FOUND_IMG" ]; then
+              echo "✅ ¡Kernel detectado con éxito en: $FOUND_IMG!"
+              echo "CHECK_IMAGE=true" >> $GITHUB_ENV
+          else
+              echo "🚨 ERROR: No se encontró ningún binario Image válido en $BOOT_DIR"
+              exit 1
+          fi
 
-    - name: Make AnyKernel3
-      run: |
-        if [ "$CHECK_IMAGE" != "true" ]; then
-          echo "Imagen del kernel no encontrada, saltando creación de AnyKernel3."
-          exit 0
-        fi
+      - name: Make AnyKernel3
+        run: |
+          if [ "$CHECK_IMAGE" != "true" ]; then
+            echo "Imagen del kernel no encontrada, saltando creación de AnyKernel3."
+            exit 0
+          fi
 
-        cd $GITHUB_WORKSPACE/kernel_workspace
-        git clone https://github.com/osm0sis/AnyKernel3 --depth=1 AnyKernel3
-        cp android-kernel/out/arch/arm64/boot/$KERNEL_FILE_NAME AnyKernel3/$KERNEL_FILE_NAME
+          cd $GITHUB_WORKSPACE/kernel_workspace
+          git clone https://github.com/osm0sis/AnyKernel3 --depth=1 AnyKernel3
+          cp android-kernel/out/arch/arm64/boot/$KERNEL_FILE_NAME AnyKernel3/$KERNEL_FILE_NAME
 
-        echo "# AnyKernel3 Script para Miatoll" > AnyKernel3/anykernel.sh
-        echo "properties() { '" >> AnyKernel3/anykernel.sh
-        echo "kernel.string=Miatoll NetHunter Kernel por ${{ github.actor }}" >> AnyKernel3/anykernel.sh
-        echo "do.devicecheck=0" >> AnyKernel3/anykernel.sh
-        echo "do.modules=0" >> AnyKernel3/anykernel.sh
-        echo "do.systemless=1" >> AnyKernel3/anykernel.sh
-        echo "do.cleanup=1" >> AnyKernel3/anykernel.sh
-        echo "do.cleanuntil=500" >> AnyKernel3/anykernel.sh
-        echo "device.name1=miatoll" >> AnyKernel3/anykernel.sh
-        echo "device.name2=curtana" >> AnyKernel3/anykernel.sh
-        echo "device.name3=joyeuse" >> AnyKernel3/anykernel.sh
-        echo "device.name4=gram" >> AnyKernel3/anykernel.sh
-        echo "device.name5=excalibur" >> AnyKernel3/anykernel.sh
-        echo "supported.versions=" >> AnyKernel3/anykernel.sh
-        echo "supported.patchlevels=" >> AnyKernel3/anykernel.sh
-        echo "'; }" >> AnyKernel3/anykernel.sh
-        echo "" >> AnyKernel3/anykernel.sh
-        echo 'if [ -e /dev/block/bootdevice/by-name/boot ]; then' >> AnyKernel3/anykernel.sh
-        echo '  block=/dev/block/bootdevice/by-name/boot;' >> AnyKernel3/anykernel.sh
-        echo 'elif [ -e /dev/block/by-name/boot ]; then' >> AnyKernel3/anykernel.sh
-        echo '  block=/dev/block/by-name/boot;' >> AnyKernel3/anykernel.sh
-        echo 'else' >> AnyKernel3/anykernel.sh
-        echo '  block=/dev/block/bootdevice/by-name/boot;' >> AnyKernel3/anykernel.sh
-        echo 'fi;' >> AnyKernel3/anykernel.sh
-        echo "" >> AnyKernel3/anykernel.sh
-        echo 'is_slot_device=0;' >> AnyKernel3/anykernel.sh
-        echo 'ramdisk_build_dts=0;' >> AnyKernel3/anykernel.sh
-        echo "" >> AnyKernel3/anykernel.sh
-        echo '. tools/ak3-core.sh;' >> AnyKernel3/anykernel.sh
-        echo 'dump_boot;' >> AnyKernel3/anykernel.sh
-        echo 'write_boot;' >> AnyKernel3/anykernel.sh
+          python3 -c "
+          with open('AnyKernel3/anykernel.sh', 'r') as f:
+              content = f.read()
 
-        rm -rf AnyKernel3/.git* AnyKernel3/README.md
-        cd AnyKernel3
-        zip -r9 ../Miatoll-NetHunter-Kernel.zip *
-        
-    - name: Upload Artifact
-      if: env.CHECK_IMAGE == 'true'
-      uses: actions/upload-artifact@v4
-      with:
-        name: AK3-Miatoll-NetHunter-KSU
-        path: kernel_workspace/Miatoll-NetHunter-Kernel.zip
+          content = content.replace('kernel.string=', 'kernel.string=Miatoll NetHunter Kernel por ${{ github.actor }}')
+          content = content.replace('do.devicecheck=1', 'do.devicecheck=0')
+          content = content.replace('block=auto;', 'block=/dev/block/bootdevice/by-name/boot;')
+          content = content.replace('device.name1=', 'device.name1=miatoll')
+          content = content.replace('device.name2=', 'device.name2=curtana')
+          content = content.replace('device.name3=', 'device.name3=joyeuse')
+          content = content.replace('device.name4=', 'device.name4=gram')
+          content = content.replace('device.name5=', 'device.name5=excalibur')
+
+          with open('AnyKernel3/anykernel.sh', 'w') as f:
+              f.write(content)
+          "
+
+          rm -rf AnyKernel3/.git* AnyKernel3/README.md
+          cd AnyKernel3
+          zip -r9 ../Miatoll-NetHunter-Kernel.zip *
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AK3-Miatoll-NetHunter-KSU
+          path: kernel_workspace/Miatoll-NetHunter-Kernel.zip
