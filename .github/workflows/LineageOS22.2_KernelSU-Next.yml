@@ -153,7 +153,9 @@ jobs:
           content = re.sub(r'device\.name3=.*', 'device.name3=joyeuse', content)
           content = re.sub(r'device\.name4=.*', 'device.name4=gram', content)
           content = re.sub(r'device\.name5=.*', 'device.name5=excalibur', content)
-          content = re.sub(r'block=.*?;', 'block=auto;', content)
+          
+          # Fuerza la ruta exacta de la particion boot de Miatoll en Recovery
+          content = re.sub(r'block=.*?;', 'block=/dev/block/by-name/boot;', content)
 
           with open(ak3_file, 'w') as f:
               f.write(content)
