@@ -123,16 +123,16 @@ jobs:
             exit 1
         fi
 
-    - name: Make AnyKernel3
-      if: env.CHECK_IMAGE == 'true'
-      run: |
-        cd $GITHUB_WORKSPACE/kernel_workspace
-        git clone https://github.com/osm0sis/AnyKernel3 --depth=1 AnyKernel3
-        cp android-kernel/out/arch/arm64/boot/${{ env.KERNEL_FILE_NAME }} AnyKernel3/${{ env.KERNEL_FILE_NAME }}
+        - name: Make AnyKernel3
+          if: env.CHECK_IMAGE == 'true'
+          run: |
+            cd $GITHUB_WORKSPACE/kernel_workspace
+            git clone https://github.com/osm0sis/AnyKernel3 --depth=1 AnyKernel3
+            cp android-kernel/out/arch/arm64/boot/${{ env.KERNEL_FILE_NAME }} AnyKernel3/${{ env.KERNEL_FILE_NAME }}
         
-        # Generar anykernel.sh con el orden estricto que exige el motor
-        cat << 'EOF' > AnyKernel3/anykernel.sh
-        # AnyKernel3 Script para Miatoll (Qualcomm Snapdragon)
+            # Generar anykernel.sh con detección multinivel de la partición /boot de Qualcomm
+            cat << 'EOF' > AnyKernel3/anykernel.sh
+            # AnyKernel3 Script para Miatoll (Qualcomm Snapdragon)
 
         properties() { '
         kernel.string=Miatoll NetHunter Kernel por ${{ github.actor }}
@@ -150,15 +150,22 @@ jobs:
         supported.patchlevels=
         '; }
 
-        # 1. Variables de shell (OBLIGATORIO: Deben ir ANTES de cargar ak3-core.sh)
-        block=boot;
+        # Detección explícita de bloques para Miatoll (Snapdragon 720G)
+        if [ -b /dev/block/bootdevice/by-name/boot ]; then
+        block=/dev/block/bootdevice/by-name/boot;
+          elif [ -b /dev/block/by-name/boot ]; then
+          block=/dev/block/by-name/boot;
+        else
+          block=auto;
+        fi;
+
         is_slot_device=0;
         ramdisk_build_dts=0;
 
-        # 2. Carga del motor AnyKernel3
+        # Carga del motor AnyKernel3
         . tools/ak3-core.sh;
 
-        # 3. Flasheo en la partición /boot de Qualcomm
+        # Flasheo
         dump_boot;
         write_boot;
         EOF
