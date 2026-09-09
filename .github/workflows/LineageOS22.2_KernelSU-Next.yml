@@ -130,16 +130,40 @@ jobs:
         git clone https://github.com/osm0sis/AnyKernel3 --depth=1 AnyKernel3
         cp android-kernel/out/arch/arm64/boot/${{ env.KERNEL_FILE_NAME }} AnyKernel3/${{ env.KERNEL_FILE_NAME }}
         
-        # 1. Nombre del Kernel
-        sed -i 's|kernel.string=.*|kernel.string=Miatoll Hacking Kernel por ${{ github.actor }}|g' AnyKernel3/anykernel.sh
+        # Sobrescribimos anykernel.sh por completo sin depender de sed
+        cat << 'EOF' > AnyKernel3/anykernel.sh
+        # AnyKernel3 Script para Miatoll (Qualcomm Snapdragon)
         
-        # 2. Desactivar chequeo de dispositivo para evitar bloqueos de TWRP
-        sed -i 's|do.devicecheck=.*|do.devicecheck=0;|g' AnyKernel3/anykernel.sh
+        properties() { '
+        kernel.string=Miatoll NetHunter Kernel por ${{ github.actor }}
+        do.devicecheck=0
+        do.modules=0
+        do.systemless=1
+        do.cleanup=1
+        do.cleanuntil=500
+        device.name1=miatoll
+        device.name2=curtana
+        device.name3=joyeuse
+        device.name4=gram
+        device.name5=excalibur
+        block=auto;
+        is_slot_device=0;
+        ramdisk_build_dts=0;
+        '; }
         
-        # 3. Forzar ruta universal de partición para Qualcomm Snapdragon (Miatoll)
-        sed -i 's|block=.*|block=/dev/block/bootdevice/by-name/boot;|g' AnyKernel3/anykernel.sh
-        sed -i 's|is_slot_device=.*|is_slot_device=0;|g' AnyKernel3/anykernel.sh
+        # Variables de entorno para AnyKernel3
+        block=auto;
+        is_slot_device=0;
+        ramdisk_build_dts=0;
         
+        # Carga de rutinas de AnyKernel3
+        . tools/ak3-core.sh;
+        
+        # Extracción y flasheo de la partición /boot
+        split_boot;
+        flash_boot;
+        EOF
+
         rm -rf AnyKernel3/.git* AnyKernel3/README.md
         cd AnyKernel3
         zip -r9 ../Miatoll-NetHunter-Kernel.zip *
