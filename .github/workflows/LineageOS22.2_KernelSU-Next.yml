@@ -124,55 +124,52 @@ jobs:
         fi
 
     - name: Make AnyKernel3
-      if: env.CHECK_IMAGE == 'true'
       run: |
+        if [ "$CHECK_IMAGE" != "true" ]; then
+          echo "Imagen del kernel no encontrada, saltando creación de AnyKernel3."
+          exit 0
+        fi
+
         cd $GITHUB_WORKSPACE/kernel_workspace
         git clone https://github.com/osm0sis/AnyKernel3 --depth=1 AnyKernel3
-        cp android-kernel/out/arch/arm64/boot/${{ env.KERNEL_FILE_NAME }} AnyKernel3/${{ env.KERNEL_FILE_NAME }}
+        cp android-kernel/out/arch/arm64/boot/$KERNEL_FILE_NAME AnyKernel3/$KERNEL_FILE_NAME
 
-        cat << 'EOF' > AnyKernel3/anykernel.sh
-# AnyKernel3 Script para Miatoll (Qualcomm Snapdragon)
-
-properties() { '
-kernel.string=Miatoll NetHunter Kernel por ${{ github.actor }}
-do.devicecheck=0
-do.modules=0
-do.systemless=1
-do.cleanup=1
-do.cleanuntil=500
-device.name1=miatoll
-device.name2=curtana
-device.name3=joyeuse
-device.name4=gram
-device.name5=excalibur
-supported.versions=
-supported.patchlevels=
-'; }
-
-# Detección explícita de bloques para Miatoll (Snapdragon 720G)
-if [ -b /dev/block/bootdevice/by-name/boot ]; then
-  block=/dev/block/bootdevice/by-name/boot;
-elif [ -b /dev/block/by-name/boot ]; then
-  block=/dev/block/by-name/boot;
-else
-  block=auto;
-fi;
-
-is_slot_device=0;
-ramdisk_build_dts=0;
-
-# Carga del motor AnyKernel3
-. tools/ak3-core.sh;
-
-# Flasheo
-dump_boot;
-write_boot;
-EOF
+        echo "# AnyKernel3 Script para Miatoll" > AnyKernel3/anykernel.sh
+        echo "properties() { '" >> AnyKernel3/anykernel.sh
+        echo "kernel.string=Miatoll NetHunter Kernel por ${{ github.actor }}" >> AnyKernel3/anykernel.sh
+        echo "do.devicecheck=0" >> AnyKernel3/anykernel.sh
+        echo "do.modules=0" >> AnyKernel3/anykernel.sh
+        echo "do.systemless=1" >> AnyKernel3/anykernel.sh
+        echo "do.cleanup=1" >> AnyKernel3/anykernel.sh
+        echo "do.cleanuntil=500" >> AnyKernel3/anykernel.sh
+        echo "device.name1=miatoll" >> AnyKernel3/anykernel.sh
+        echo "device.name2=curtana" >> AnyKernel3/anykernel.sh
+        echo "device.name3=joyeuse" >> AnyKernel3/anykernel.sh
+        echo "device.name4=gram" >> AnyKernel3/anykernel.sh
+        echo "device.name5=excalibur" >> AnyKernel3/anykernel.sh
+        echo "supported.versions=" >> AnyKernel3/anykernel.sh
+        echo "supported.patchlevels=" >> AnyKernel3/anykernel.sh
+        echo "'; }" >> AnyKernel3/anykernel.sh
+        echo "" >> AnyKernel3/anykernel.sh
+        echo 'if [ -b /dev/block/bootdevice/by-name/boot ]; then' >> AnyKernel3/anykernel.sh
+        echo '  block=/dev/block/bootdevice/by-name/boot;' >> AnyKernel3/anykernel.sh
+        echo 'elif [ -b /dev/block/by-name/boot ]; then' >> AnyKernel3/anykernel.sh
+        echo '  block=/dev/block/by-name/boot;' >> AnyKernel3/anykernel.sh
+        echo 'else' >> AnyKernel3/anykernel.sh
+        echo '  block=auto;' >> AnyKernel3/anykernel.sh
+        echo 'fi;' >> AnyKernel3/anykernel.sh
+        echo "" >> AnyKernel3/anykernel.sh
+        echo 'is_slot_device=0;' >> AnyKernel3/anykernel.sh
+        echo 'ramdisk_build_dts=0;' >> AnyKernel3/anykernel.sh
+        echo "" >> AnyKernel3/anykernel.sh
+        echo '. tools/ak3-core.sh;' >> AnyKernel3/anykernel.sh
+        echo 'dump_boot;' >> AnyKernel3/anykernel.sh
+        echo 'write_boot;' >> AnyKernel3/anykernel.sh
 
         rm -rf AnyKernel3/.git* AnyKernel3/README.md
         cd AnyKernel3
         zip -r9 ../Miatoll-NetHunter-Kernel.zip *
-
+        
     - name: Upload Artifact
       if: env.CHECK_IMAGE == 'true'
       uses: actions/upload-artifact@v4
