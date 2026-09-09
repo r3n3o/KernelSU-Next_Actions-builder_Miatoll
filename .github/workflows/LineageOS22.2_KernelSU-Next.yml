@@ -138,34 +138,66 @@ jobs:
           git clone https://github.com/osm0sis/AnyKernel3 --depth=1 AnyKernel3
           cp android-kernel/out/arch/arm64/boot/$KERNEL_FILE_NAME AnyKernel3/$KERNEL_FILE_NAME
 
-          python3 -c "
-          import re, os
-
-          ak3_file = 'AnyKernel3/anykernel.sh'
-          with open(ak3_file, 'r') as f:
-              content = f.read()
+          cat << 'EOF_PYTHON' > AnyKernel3/generate_ak3.py
+          import os
 
           actor = os.environ.get('GITHUB_ACTOR', 'User')
-          content = re.sub(r'kernel\.string=.*', f'kernel.string=Miatoll NetHunter Kernel por {actor}', content)
-          content = re.sub(r'do\.devicecheck=\d+', 'do.devicecheck=0', content)
-          content = re.sub(r'device\.name1=.*', 'device.name1=miatoll', content)
-          content = re.sub(r'device\.name2=.*', 'device.name2=curtana', content)
-          content = re.sub(r'device\.name3=.*', 'device.name3=joyeuse', content)
-          content = re.sub(r'device\.name4=.*', 'device.name4=gram', content)
-          content = re.sub(r'device\.name5=.*', 'device.name5=excalibur', content)
-          
-          # Fuerza la ruta exacta de la particion boot de Miatoll en Recovery
-          content = re.sub(r'block=.*?;', 'block=/dev/block/by-name/boot;', content)
 
-          with open(ak3_file, 'w') as f:
-              f.write(content)
-          "
+          ak3_content = """# AnyKernel3 Script para Miatoll (Qualcomm SM6250)
+
+          properties() { '
+          kernel.string=Miatoll NetHunter Kernel por """ + actor + """
+          do.devicecheck=0
+          do.modules=0
+          do.systemless=1
+          do.cleanup=1
+          do.cleanuntil=500
+          device.name1=miatoll
+          device.name2=curtana
+          device.name3=joyeuse
+          device.name4=gram
+          device.name5=excalibur
+          supported.versions=
+          supported.patchlevels=
+          '; }
+
+          # Resolucion dinamica de la particion /boot en Recovery
+          block=""
+          for dev in /dev/block/by-name/boot /dev/block/bootdevice/by-name/boot /dev/block/platform/soc/1d84000.ufshc/by-name/boot /dev/block/platform/soc/7c40000.sdhci/by-name/boot; do
+            if [ -e "$dev" ]; then
+            block="$dev"
+             break
+              fi
+            done
+
+          if [ -z "$block" ]; then
+            block=$(find /dev/block -name boot 2>/dev/null | head -n 1)
+          fi
+
+          if [ -z "$block" ]; then
+            block="/dev/block/by-name/boot"
+          fi
+
+          is_slot_device=0
+          ramdisk_build_dts=0
+
+          . tools/ak3-core.sh
+
+          dump_boot
+          write_boot
+          """
+
+          with open('AnyKernel3/anykernel.sh', 'w') as f:
+          f.write(ak3_content)
+          EOF_PYTHON
+
+          python3 AnyKernel3/generate_ak3.py
 
           echo "=== VERIFICACIÓN DEL ARCHIVO ANYKERNEL.SH GENERADO ==="
           cat AnyKernel3/anykernel.sh
           echo "======================================================"
 
-          rm -rf AnyKernel3/.git* AnyKernel3/README.md
+          rm -rf AnyKernel3/.git* AnyKernel3/README.md AnyKernel3/generate_ak3.py
           cd AnyKernel3
           zip -r9 ../Miatoll-NetHunter-Kernel.zip *
 
@@ -174,3 +206,4 @@ jobs:
         with:
           name: AK3-Miatoll-NetHunter-KSU
           path: kernel_workspace/Miatoll-NetHunter-Kernel.zip
+
