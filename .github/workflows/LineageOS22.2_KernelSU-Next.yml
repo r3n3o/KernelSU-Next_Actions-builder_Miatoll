@@ -59,7 +59,7 @@ jobs:
           echo "CONFIG_MODULES=y" >> $DEFCONFIG
           echo "CONFIG_MODULE_UNLOAD=y" >> $DEFCONFIG
           
-          # --- SOLUCIÓN DEL CONFLICTO DE ENLAZADO WIFI ---
+          # Módulos WiFi
           echo "CONFIG_WIRELESS=y" >> $DEFCONFIG
           echo "CONFIG_CFG80211=y" >> $DEFCONFIG
           echo "CONFIG_MAC80211=y" >> $DEFCONFIG
@@ -72,7 +72,7 @@ jobs:
           echo "CONFIG_RT2X00=m" >> $DEFCONFIG
           echo "CONFIG_RT2800USB=m" >> $DEFCONFIG
           
-          # Parches USB y Emulación
+          # Parches USB y Emulación HID (BadUSB)
           echo "CONFIG_USB_G_ANDROID=y" >> $DEFCONFIG
           echo "CONFIG_USB_F_HID=y" >> $DEFCONFIG
           echo "CONFIG_USB_CONFIGFS_F_HID=y" >> $DEFCONFIG
@@ -139,21 +139,29 @@ jobs:
           cp android-kernel/out/arch/arm64/boot/$KERNEL_FILE_NAME AnyKernel3/$KERNEL_FILE_NAME
 
           python3 -c "
-          with open('AnyKernel3/anykernel.sh', 'r') as f:
+          import re, os
+
+          ak3_file = 'AnyKernel3/anykernel.sh'
+          with open(ak3_file, 'r') as f:
               content = f.read()
 
-          content = content.replace('kernel.string=', 'kernel.string=Miatoll NetHunter Kernel por ${{ github.actor }}')
-          content = content.replace('do.devicecheck=1', 'do.devicecheck=0')
-          content = content.replace('block=auto;', 'block=/dev/block/bootdevice/by-name/boot;')
-          content = content.replace('device.name1=', 'device.name1=miatoll')
-          content = content.replace('device.name2=', 'device.name2=curtana')
-          content = content.replace('device.name3=', 'device.name3=joyeuse')
-          content = content.replace('device.name4=', 'device.name4=gram')
-          content = content.replace('device.name5=', 'device.name5=excalibur')
+          actor = os.environ.get('GITHUB_ACTOR', 'User')
+          content = re.sub(r'kernel\.string=.*', f'kernel.string=Miatoll NetHunter Kernel por {actor}', content)
+          content = re.sub(r'do\.devicecheck=\d+', 'do.devicecheck=0', content)
+          content = re.sub(r'device\.name1=.*', 'device.name1=miatoll', content)
+          content = re.sub(r'device\.name2=.*', 'device.name2=curtana', content)
+          content = re.sub(r'device\.name3=.*', 'device.name3=joyeuse', content)
+          content = re.sub(r'device\.name4=.*', 'device.name4=gram', content)
+          content = re.sub(r'device\.name5=.*', 'device.name5=excalibur', content)
+          content = re.sub(r'block=.*?;', 'block=auto;', content)
 
-          with open('AnyKernel3/anykernel.sh', 'w') as f:
+          with open(ak3_file, 'w') as f:
               f.write(content)
           "
+
+          echo "=== VERIFICACIÓN DEL ARCHIVO ANYKERNEL.SH GENERADO ==="
+          cat AnyKernel3/anykernel.sh
+          echo "======================================================"
 
           rm -rf AnyKernel3/.git* AnyKernel3/README.md
           cd AnyKernel3
