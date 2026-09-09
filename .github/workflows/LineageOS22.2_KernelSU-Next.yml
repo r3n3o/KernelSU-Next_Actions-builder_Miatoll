@@ -151,12 +151,12 @@ jobs:
         echo "supported.patchlevels=" >> AnyKernel3/anykernel.sh
         echo "'; }" >> AnyKernel3/anykernel.sh
         echo "" >> AnyKernel3/anykernel.sh
-        echo 'if [ -b /dev/block/bootdevice/by-name/boot ]; then' >> AnyKernel3/anykernel.sh
+        echo 'if [ -e /dev/block/bootdevice/by-name/boot ]; then' >> AnyKernel3/anykernel.sh
         echo '  block=/dev/block/bootdevice/by-name/boot;' >> AnyKernel3/anykernel.sh
-        echo 'elif [ -b /dev/block/by-name/boot ]; then' >> AnyKernel3/anykernel.sh
+        echo 'elif [ -e /dev/block/by-name/boot ]; then' >> AnyKernel3/anykernel.sh
         echo '  block=/dev/block/by-name/boot;' >> AnyKernel3/anykernel.sh
         echo 'else' >> AnyKernel3/anykernel.sh
-        echo '  block=auto;' >> AnyKernel3/anykernel.sh
+        echo '  block=/dev/block/bootdevice/by-name/boot;' >> AnyKernel3/anykernel.sh
         echo 'fi;' >> AnyKernel3/anykernel.sh
         echo "" >> AnyKernel3/anykernel.sh
         echo 'is_slot_device=0;' >> AnyKernel3/anykernel.sh
