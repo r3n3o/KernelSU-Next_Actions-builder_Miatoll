@@ -123,52 +123,51 @@ jobs:
             exit 1
         fi
 
-        - name: Make AnyKernel3
-          if: env.CHECK_IMAGE == 'true'
-          run: |
-            cd $GITHUB_WORKSPACE/kernel_workspace
-            git clone https://github.com/osm0sis/AnyKernel3 --depth=1 AnyKernel3
-            cp android-kernel/out/arch/arm64/boot/${{ env.KERNEL_FILE_NAME }} AnyKernel3/${{ env.KERNEL_FILE_NAME }}
-        
-            # Generar anykernel.sh con detección multinivel de la partición /boot de Qualcomm
-            cat << 'EOF' > AnyKernel3/anykernel.sh
-            # AnyKernel3 Script para Miatoll (Qualcomm Snapdragon)
+    - name: Make AnyKernel3
+      if: env.CHECK_IMAGE == 'true'
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace
+        git clone https://github.com/osm0sis/AnyKernel3 --depth=1 AnyKernel3
+        cp android-kernel/out/arch/arm64/boot/${{ env.KERNEL_FILE_NAME }} AnyKernel3/${{ env.KERNEL_FILE_NAME }}
 
-        properties() { '
-        kernel.string=Miatoll NetHunter Kernel por ${{ github.actor }}
-        do.devicecheck=0
-        do.modules=0
-        do.systemless=1
-        do.cleanup=1
-        do.cleanuntil=500
-        device.name1=miatoll
-        device.name2=curtana
-        device.name3=joyeuse
-        device.name4=gram
-        device.name5=excalibur
-        supported.versions=
-        supported.patchlevels=
-        '; }
+        cat << 'EOF' > AnyKernel3/anykernel.sh
+# AnyKernel3 Script para Miatoll (Qualcomm Snapdragon)
 
-        # Detección explícita de bloques para Miatoll (Snapdragon 720G)
-        if [ -b /dev/block/bootdevice/by-name/boot ]; then
-        block=/dev/block/bootdevice/by-name/boot;
-          elif [ -b /dev/block/by-name/boot ]; then
-          block=/dev/block/by-name/boot;
-        else
-          block=auto;
-        fi;
+properties() { '
+kernel.string=Miatoll NetHunter Kernel por ${{ github.actor }}
+do.devicecheck=0
+do.modules=0
+do.systemless=1
+do.cleanup=1
+do.cleanuntil=500
+device.name1=miatoll
+device.name2=curtana
+device.name3=joyeuse
+device.name4=gram
+device.name5=excalibur
+supported.versions=
+supported.patchlevels=
+'; }
 
-        is_slot_device=0;
-        ramdisk_build_dts=0;
+# Detección explícita de bloques para Miatoll (Snapdragon 720G)
+if [ -b /dev/block/bootdevice/by-name/boot ]; then
+  block=/dev/block/bootdevice/by-name/boot;
+elif [ -b /dev/block/by-name/boot ]; then
+  block=/dev/block/by-name/boot;
+else
+  block=auto;
+fi;
 
-        # Carga del motor AnyKernel3
-        . tools/ak3-core.sh;
+is_slot_device=0;
+ramdisk_build_dts=0;
 
-        # Flasheo
-        dump_boot;
-        write_boot;
-        EOF
+# Carga del motor AnyKernel3
+. tools/ak3-core.sh;
+
+# Flasheo
+dump_boot;
+write_boot;
+EOF
 
         rm -rf AnyKernel3/.git* AnyKernel3/README.md
         cd AnyKernel3
