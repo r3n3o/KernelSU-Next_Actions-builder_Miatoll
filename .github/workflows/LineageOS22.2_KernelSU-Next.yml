@@ -130,7 +130,7 @@ jobs:
         git clone https://github.com/osm0sis/AnyKernel3 --depth=1 AnyKernel3
         cp android-kernel/out/arch/arm64/boot/${{ env.KERNEL_FILE_NAME }} AnyKernel3/${{ env.KERNEL_FILE_NAME }}
         
-        # Sobrescribimos anykernel.sh por completo sin depender de sed
+        # Creación del script nativo AnyKernel3
         cat << 'EOF' > AnyKernel3/anykernel.sh
         # AnyKernel3 Script para Miatoll (Qualcomm Snapdragon)
         
@@ -146,22 +146,20 @@ jobs:
         device.name3=joyeuse
         device.name4=gram
         device.name5=excalibur
-        block=auto;
-        is_slot_device=0;
-        ramdisk_build_dts=0;
+        supported.versions=
+        supported.patchlevels=
         '; }
         
-        # Variables de entorno para AnyKernel3
+        # Carga del motor de AnyKernel3
+        . tools/ak3-core.sh;
+        
+        # Configuración e Instalación
         block=auto;
         is_slot_device=0;
         ramdisk_build_dts=0;
         
-        # Carga de rutinas de AnyKernel3
-        . tools/ak3-core.sh;
-        
-        # Extracción y flasheo de la partición /boot
-        split_boot;
-        flash_boot;
+        dump_boot;
+        write_boot;
         EOF
 
         rm -rf AnyKernel3/.git* AnyKernel3/README.md
