@@ -128,13 +128,11 @@ jobs:
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
         git clone https://github.com/osm0sis/AnyKernel3 --depth=1 AnyKernel3
-        
-        # Copiar el binario del kernel compilado al directorio de AnyKernel3
         cp android-kernel/out/arch/arm64/boot/${{ env.KERNEL_FILE_NAME }} AnyKernel3/${{ env.KERNEL_FILE_NAME }}
         
-        # Generar anykernel.sh perfectamente ordenado y sin errores de indentación
-        python3 -c "
-        content = '''# AnyKernel3 Script para Miatoll (Qualcomm Snapdragon)
+        # Generar anykernel.sh con el orden estricto que exige el motor
+        cat << 'EOF' > AnyKernel3/anykernel.sh
+        # AnyKernel3 Script para Miatoll (Qualcomm Snapdragon)
 
         properties() { '
         kernel.string=Miatoll NetHunter Kernel por ${{ github.actor }}
@@ -152,19 +150,18 @@ jobs:
         supported.patchlevels=
         '; }
 
-        # Configuración de bloque (DEBE IR ANTES DE CARGAR AK3-CORE.SH)
-        block=auto;
+        # 1. Variables de shell (OBLIGATORIO: Deben ir ANTES de cargar ak3-core.sh)
+        block=boot;
         is_slot_device=0;
         ramdisk_build_dts=0;
 
-        # Carga del motor AnyKernel3 y ejecución del flasheo
+        # 2. Carga del motor AnyKernel3
         . tools/ak3-core.sh;
+
+        # 3. Flasheo en la partición /boot de Qualcomm
         dump_boot;
         write_boot;
-        '''
-        with open('AnyKernel3/anykernel.sh', 'w') as f:
-            f.write('\n'.join([line.strip() for line in content.strip().splitlines()]) + '\n')
-        "
+        EOF
 
         rm -rf AnyKernel3/.git* AnyKernel3/README.md
         cd AnyKernel3
