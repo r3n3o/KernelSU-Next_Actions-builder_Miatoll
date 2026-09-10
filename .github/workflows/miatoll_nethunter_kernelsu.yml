@@ -58,7 +58,7 @@ jobs:
           echo "CONFIG_HAVE_KPROBES=y" >> $DEFCONFIG
           echo "CONFIG_KRETPROBES=y" >> $DEFCONFIG
           
-          # 1. Comunicacion IPC entre procesos
+          # 1. Comunicacion IPC entre procesos (Requerido para NetHunter)
           echo "CONFIG_SYSVIPC=y" >> $DEFCONFIG
           echo "CONFIG_SYSVIPC_SYSCTL=y" >> $DEFCONFIG
           
@@ -74,7 +74,6 @@ jobs:
           
           # 4. Controladores para tarjetas de red externas OTG (Integrados en el kernel)
           echo "CONFIG_WLAN_VENDOR_ATH=y" >> $DEFCONFIG
-          echo "CONFIG_ATH_CARDS=y" >> $DEFCONFIG
           echo "CONFIG_ATH9K_HTC=y" >> $DEFCONFIG
           echo "CONFIG_WLAN_VENDOR_REALTEK=y" >> $DEFCONFIG
           echo "CONFIG_RTL8187=y" >> $DEFCONFIG
@@ -82,8 +81,7 @@ jobs:
           echo "CONFIG_RT2X00=y" >> $DEFCONFIG
           echo "CONFIG_RT2800USB=y" >> $DEFCONFIG
           
-          # 5. Emulacion HID y Gadget USB (Ataques BadUSB)
-          echo "CONFIG_USB_G_ANDROID=y" >> $DEFCONFIG
+          # 5. Emulacion HID y Gadget USB (ConfigFS nativo para BadUSB)
           echo "CONFIG_USB_F_HID=y" >> $DEFCONFIG
           echo "CONFIG_USB_CONFIGFS_F_HID=y" >> $DEFCONFIG
           
@@ -116,7 +114,11 @@ jobs:
           "
           
           make O=out $CC_ARGS vendor/xiaomi/miatoll_defconfig
-          make -j$(nproc --all) O=out $CC_ARGS
+          make -j$(nproc --all) O=out $CC_ARGS || {
+            echo "::error::Build failed in parallel mode! Rerunning with -j1 to isolate exact compiler error:"
+            make -j1 O=out $CC_ARGS
+            exit 1
+          }
 
       - name: Check and Locate Kernel Output Files
         run: |
