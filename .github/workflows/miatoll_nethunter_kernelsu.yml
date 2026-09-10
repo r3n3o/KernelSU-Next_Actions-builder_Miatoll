@@ -72,12 +72,15 @@ jobs:
           echo "CONFIG_MAC80211=y" >> $DEFCONFIG
           echo "CONFIG_CFG80211_WEXT=y" >> $DEFCONFIG
           
-          # 4. Controladores para tarjetas de red externas OTG
-          echo "CONFIG_ATH_CARDS=m" >> $DEFCONFIG
-          echo "CONFIG_ATH9K_HTC=m" >> $DEFCONFIG
-          echo "CONFIG_RTL8187=m" >> $DEFCONFIG
-          echo "CONFIG_RT2X00=m" >> $DEFCONFIG
-          echo "CONFIG_RT2800USB=m" >> $DEFCONFIG
+          # 4. Controladores para tarjetas de red externas OTG (Integrados en el kernel)
+          echo "CONFIG_WLAN_VENDOR_ATH=y" >> $DEFCONFIG
+          echo "CONFIG_ATH_CARDS=y" >> $DEFCONFIG
+          echo "CONFIG_ATH9K_HTC=y" >> $DEFCONFIG
+          echo "CONFIG_WLAN_VENDOR_REALTEK=y" >> $DEFCONFIG
+          echo "CONFIG_RTL8187=y" >> $DEFCONFIG
+          echo "CONFIG_WLAN_VENDOR_RALINK=y" >> $DEFCONFIG
+          echo "CONFIG_RT2X00=y" >> $DEFCONFIG
+          echo "CONFIG_RT2800USB=y" >> $DEFCONFIG
           
           # 5. Emulacion HID y Gadget USB (Ataques BadUSB)
           echo "CONFIG_USB_G_ANDROID=y" >> $DEFCONFIG
