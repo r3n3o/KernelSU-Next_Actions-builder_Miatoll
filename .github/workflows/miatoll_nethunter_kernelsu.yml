@@ -65,8 +65,8 @@ jobs:
           echo "CONFIG_HAVE_KPROBES=y" >> $DEFCONFIG
           echo "CONFIG_KRETPROBES=y" >> $DEFCONFIG
           
-          # Formato de imagen RAW uncompressed para ABL bootloader de Xiaomi SM6250
-          echo "CONFIG_BUILD_ARM64_UNCOMPRESSED_KERNEL=y" >> $DEFCONFIG
+          # Compresion GZIP estandar para ABL bootloader de Xiaomi Miatoll SM7125
+          echo "CONFIG_BUILD_ARM64_KERNEL_COMPRESSION_GZIP=y" >> $DEFCONFIG
           
           # 1. Comunicacion IPC y aislamiento de Namespaces (NetHunter Chroot, Docker, Metasploit)
           echo "CONFIG_SYSVIPC=y" >> $DEFCONFIG
@@ -195,15 +195,15 @@ jobs:
           cd $GITHUB_WORKSPACE/kernel_workspace
           BOOT_DIR="android-kernel/out/arch/arm64/boot"
           
-          # Verificar binario Image (crDroid/LineageOS Miatoll usa Image raw uncompressed)
-          if [ -f "$BOOT_DIR/Image" ]; then
-            echo "KERNEL_FILE_NAME=Image" >> $GITHUB_ENV
-            echo "CHECK_IMAGE=true" >> $GITHUB_ENV
-            echo "✅ ¡Kernel Image raw detectado con éxito!"
-          elif [ -f "$BOOT_DIR/Image.gz" ]; then
+          # Priorizar Image.gz (formato estándar y requerido por AnyKernel3 en Xiaomi Miatoll SM7125)
+          if [ -f "$BOOT_DIR/Image.gz" ]; then
             echo "KERNEL_FILE_NAME=Image.gz" >> $GITHUB_ENV
             echo "CHECK_IMAGE=true" >> $GITHUB_ENV
-            echo "✅ ¡Kernel Image.gz detectado!"
+            echo "✅ ¡Kernel Image.gz detectado con éxito!"
+          elif [ -f "$BOOT_DIR/Image" ]; then
+            echo "KERNEL_FILE_NAME=Image" >> $GITHUB_ENV
+            echo "CHECK_IMAGE=true" >> $GITHUB_ENV
+            echo "✅ ¡Kernel Image raw detectado!"
           else
             echo "🚨 ERROR: No se encontró ningún binario Image válido en $BOOT_DIR"
             exit 1
