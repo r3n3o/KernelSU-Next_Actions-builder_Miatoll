@@ -87,6 +87,9 @@ jobs:
           echo "CONFIG_HAVE_KPROBES=y" >> $DEFCONFIG
           echo "CONFIG_KRETPROBES=y" >> $DEFCONFIG
           
+          # Formato de imagen RAW uncompressed para ABL bootloader de Xiaomi SM6250
+          echo "CONFIG_BUILD_ARM64_UNCOMPRESSED_KERNEL=y" >> $DEFCONFIG
+          
           # 1. Comunicacion IPC y aislamiento de Namespaces (NetHunter Chroot, Docker, Metasploit)
           echo "CONFIG_SYSVIPC=y" >> $DEFCONFIG
           echo "CONFIG_SYSVIPC_SYSCTL=y" >> $DEFCONFIG
@@ -203,9 +206,9 @@ jobs:
           "
           
           make O=out $CC_ARGS vendor/xiaomi/miatoll_defconfig
-          make -j$(nproc --all) O=out $CC_ARGS || {
+          make -j$(nproc --all) O=out $CC_ARGS all || {
             echo "::error::Build failed in parallel mode! Rerunning with -j1 to isolate exact compiler error:"
-            make -j1 O=out $CC_ARGS
+            make -j1 O=out $CC_ARGS all
             exit 1
           }
 
@@ -213,20 +216,30 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace
           BOOT_DIR="android-kernel/out/arch/arm64/boot"
-          FOUND_IMG=""
-          for f in Image.gz-dtb Image.gz Image Image-dtb; do
-              if [ -f "$BOOT_DIR/$f" ]; then
-                  FOUND_IMG="$BOOT_DIR/$f"
-                  echo "KERNEL_FILE_NAME=$f" >> $GITHUB_ENV
-                  break
-              fi
-          done
-          if [ -n "$FOUND_IMG" ]; then
-              echo "✅ ¡Kernel detectado con éxito en: $FOUND_IMG!"
-              echo "CHECK_IMAGE=true" >> $GITHUB_ENV
+          
+          # Verificar binario Image (crDroid/LineageOS Miatoll usa Image raw uncompressed)
+          if [ -f "$BOOT_DIR/Image" ]; then
+            echo "KERNEL_FILE_NAME=Image" >> $GITHUB_ENV
+            echo "CHECK_IMAGE=true" >> $GITHUB_ENV
+            echo "✅ ¡Kernel Image raw detectado con éxito!"
+          elif [ -f "$BOOT_DIR/Image.gz" ]; then
+            echo "KERNEL_FILE_NAME=Image.gz" >> $GITHUB_ENV
+            echo "CHECK_IMAGE=true" >> $GITHUB_ENV
+            echo "✅ ¡Kernel Image.gz detectado!"
           else
-              echo "🚨 ERROR: No se encontró ningún binario Image válido en $BOOT_DIR"
-              exit 1
+            echo "🚨 ERROR: No se encontró ningún binario Image válido en $BOOT_DIR"
+            exit 1
+          fi
+          
+          # Verificar y preparar DTB para AnyKernel3
+          if [ -f "$BOOT_DIR/dtb.img" ]; then
+            cp "$BOOT_DIR/dtb.img" $GITHUB_WORKSPACE/kernel_workspace/dtb
+            echo "HAVE_DTB=true" >> $GITHUB_ENV
+            echo "✅ ¡dtb.img detectado y copiado como dtb!"
+          elif [ -f "$BOOT_DIR/dtb" ]; then
+            cp "$BOOT_DIR/dtb" $GITHUB_WORKSPACE/kernel_workspace/dtb
+            echo "HAVE_DTB=true" >> $GITHUB_ENV
+            echo "✅ ¡dtb detectado!"
           fi
 
       - name: Make AnyKernel3
@@ -238,14 +251,22 @@ jobs:
 
           cd $GITHUB_WORKSPACE/kernel_workspace
           git clone https://github.com/osm0sis/AnyKernel3 --depth=1 AnyKernel3
-          cp android-kernel/out/arch/arm64/boot/$KERNEL_FILE_NAME AnyKernel3/$KERNEL_FILE_NAME
+          
+          # Copiar el binario del kernel
+          cp "android-kernel/out/arch/arm64/boot/$KERNEL_FILE_NAME" AnyKernel3/$KERNEL_FILE_NAME
+          
+          # Copiar el archivo DTB emparejado si existe
+          if [ "$HAVE_DTB" = "true" ] && [ -f "dtb" ]; then
+            cp dtb AnyKernel3/dtb
+            echo "[+] Archivo dtb copiado en AnyKernel3."
+          fi
 
           # Copiar el archivo estático de configuración anykernel.sh del repositorio
           cp $GITHUB_WORKSPACE/.github/anykernel/anykernel.sh AnyKernel3/anykernel.sh
 
-          echo "=== VERIFICACIÓN DEL ARCHIVO ANYKERNEL.SH COPIADO ==="
-          cat AnyKernel3/anykernel.sh
-          echo "======================================================"
+          echo "=== VERIFICACIÓN DE ESTRUCTURA ANYKERNEL3 ==="
+          ls -la AnyKernel3/
+          echo "============================================="
 
           rm -rf AnyKernel3/.git* AnyKernel3/README.md
           cd AnyKernel3
