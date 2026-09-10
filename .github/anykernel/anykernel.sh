@@ -15,8 +15,8 @@ supported.versions=
 supported.patchlevels=
 '; }
 
-# Ruta explicita al bloque UFS /boot detectado por TWRP
-block=/dev/block/sde51;
+# Enlace universal por nombre gestionado por Android/TWRP
+block=/dev/block/bootdevice/by-name/boot;
 is_slot_device=0;
 ramdisk_build_dts=0;
 
