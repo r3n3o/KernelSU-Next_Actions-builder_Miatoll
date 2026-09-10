@@ -45,6 +45,19 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
           curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
+          
+          # Patch missing syscall_fn_t on non-GKI Linux 4.14 arm64 kernel
+          python3 -c "
+          import os
+          p = 'drivers/kernelsu/hook/syscall_hook.h'
+          if os.path.exists(p):
+              with open(p, 'r') as f:
+                  c = f.read()
+              c = c.replace('#if defined(__x86_64__)\ntypedef sys_call_ptr_t syscall_fn_t;\n#endif', '#if defined(__x86_64__)\ntypedef sys_call_ptr_t syscall_fn_t;\n#elif !defined(syscall_fn_t)\ntypedef long (*syscall_fn_t)(const struct pt_regs *);\n#endif')
+              with open(p, 'w') as f:
+                  f.write(c)
+              print('✅ syscall_hook.h patched successfully for ARM64 4.14')
+          "
 
       - name: Inject NetHunter & Privacy Patches into Native Defconfig
         run: |
