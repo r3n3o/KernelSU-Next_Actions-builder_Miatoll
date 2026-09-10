@@ -49,14 +49,25 @@ jobs:
           # Patch missing syscall_fn_t on non-GKI Linux 4.14 arm64 kernel
           python3 -c "
           import os
-          p = 'drivers/kernelsu/hook/syscall_hook.h'
-          if os.path.exists(p):
-              with open(p, 'r') as f:
+          # 1. Patch missing syscall_fn_t in syscall_hook.h
+          hook_h = 'drivers/kernelsu/hook/syscall_hook.h'
+          if os.path.exists(hook_h):
+              with open(hook_h, 'r') as f:
                   c = f.read()
               c = c.replace('#if defined(__x86_64__)\ntypedef sys_call_ptr_t syscall_fn_t;\n#endif', '#if defined(__x86_64__)\ntypedef sys_call_ptr_t syscall_fn_t;\n#elif !defined(syscall_fn_t)\ntypedef long (*syscall_fn_t)(const struct pt_regs *);\n#endif')
-              with open(p, 'w') as f:
+              with open(hook_h, 'w') as f:
                   f.write(c)
               print('✅ syscall_hook.h patched successfully for ARM64 4.14')
+
+          # 2. Patch missing linux/pgtable.h in sucompat.c
+          sucompat_c = 'drivers/kernelsu/feature/sucompat.c'
+          if os.path.exists(sucompat_c):
+              with open(sucompat_c, 'r') as f:
+                  c = f.read()
+              c = c.replace('#include <linux/pgtable.h>', '#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 8, 0)\n#include <linux/pgtable.h>\n#else\n#include <asm/pgtable.h>\n#endif')
+              with open(sucompat_c, 'w') as f:
+                  f.write(c)
+              print('✅ sucompat.c patched successfully with asm/pgtable.h for 4.14')
           "
 
       - name: Inject NetHunter & Privacy Patches into Native Defconfig
