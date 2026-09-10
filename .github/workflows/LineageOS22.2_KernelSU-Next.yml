@@ -46,38 +46,38 @@ jobs:
           cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s main
 
-      - name: Inject NetHunter Patches into Native Defconfig
+      - name: Inject NetHunter & Privacy Patches into Native Defconfig
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
           DEFCONFIG="arch/arm64/configs/vendor/xiaomi/miatoll_defconfig"
           
-          # Parches IPC
+          # 1. Comunicación IPC entre procesos (Requerido por herramientas de auditoría)
           echo "CONFIG_SYSVIPC=y" >> $DEFCONFIG
           echo "CONFIG_SYSVIPC_SYSCTL=y" >> $DEFCONFIG
           
-          # Parches Base de Módulos
+          # 2. Soporte de Módulos dinámicos
           echo "CONFIG_MODULES=y" >> $DEFCONFIG
           echo "CONFIG_MODULE_UNLOAD=y" >> $DEFCONFIG
           
-          # Módulos WiFi
+          # 3. Pila inalámbrica e inyección de paquetes WiFi
           echo "CONFIG_WIRELESS=y" >> $DEFCONFIG
           echo "CONFIG_CFG80211=y" >> $DEFCONFIG
           echo "CONFIG_MAC80211=y" >> $DEFCONFIG
           echo "CONFIG_CFG80211_WEXT=y" >> $DEFCONFIG
           
-          # Drivers de tarjetas externas NetHunter (módulos)
+          # 4. Controladores para tarjetas de red externas OTG (Atheros, Realtek, Ralink)
           echo "CONFIG_ATH_CARDS=m" >> $DEFCONFIG
           echo "CONFIG_ATH9K_HTC=m" >> $DEFCONFIG
           echo "CONFIG_RTL8187=m" >> $DEFCONFIG
           echo "CONFIG_RT2X00=m" >> $DEFCONFIG
           echo "CONFIG_RT2800USB=m" >> $DEFCONFIG
           
-          # Parches USB y Emulación HID (BadUSB)
+          # 5. Emulación HID y Gadget USB (Ataques BadUSB)
           echo "CONFIG_USB_G_ANDROID=y" >> $DEFCONFIG
           echo "CONFIG_USB_F_HID=y" >> $DEFCONFIG
           echo "CONFIG_USB_CONFIGFS_F_HID=y" >> $DEFCONFIG
           
-          # Aislamiento de Namespaces (Docker/Chroot)
+          # 6. Aislamiento de Namespaces (Chroot de Kali NetHunter, Docker y Privacidad)
           echo "CONFIG_NAMESPACES=y" >> $DEFCONFIG
           echo "CONFIG_USER_NS=y" >> $DEFCONFIG
           echo "CONFIG_PID_NS=y" >> $DEFCONFIG
@@ -157,32 +157,25 @@ jobs:
           supported.patchlevels=
           '; }
 
-          # Resolucion dinamica de la particion /boot en Recovery
-          block=""
-          for dev in /dev/block/by-name/boot /dev/block/bootdevice/by-name/boot /dev/block/platform/soc/1d84000.ufshc/by-name/boot /dev/block/platform/soc/7c40000.sdhci/by-name/boot; do
-            if [ -e "$dev" ]; then
-              block="$dev"
-              break
-            fi
-          done
+          # Asignacion explicita de la particion /boot detectada en el mapa UFS de TWRP
+          if [ -e /dev/block/sde51 ]; then
+            block=/dev/block/sde51;
+          elif [ -e /dev/block/by-name/boot ]; then
+            block=/dev/block/by-name/boot;
+          else
+            block=auto;
+          fi;
 
-          if [ -z "$block" ]; then
-            block=$(find /dev/block -name boot 2>/dev/null | head -n 1)
-          fi
+          is_slot_device=0;
+          ramdisk_build_dts=0;
 
-          if [ -z "$block" ]; then
-            block="/dev/block/by-name/boot"
-          fi
+          . tools/ak3-core.sh;
 
-          is_slot_device=0
-          ramdisk_build_dts=0
-
-          . tools/ak3-core.sh
-
-          dump_boot
-          write_boot
+          dump_boot;
+          write_boot;
           EOF
 
+          # Limpieza de sangria YAML para que AnyKernel3 interprete la sintaxis limpia
           sed -i 's/^[ \t]*//' AnyKernel3/anykernel.sh
 
           echo "=== VERIFICACIÓN DEL ARCHIVO ANYKERNEL.SH GENERADO ==="
