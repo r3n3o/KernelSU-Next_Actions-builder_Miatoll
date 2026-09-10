@@ -139,7 +139,7 @@ jobs:
           cp android-kernel/out/arch/arm64/boot/$KERNEL_FILE_NAME AnyKernel3/$KERNEL_FILE_NAME
 
           cat << 'EOF' > AnyKernel3/anykernel.sh
-          # AnyKernel3 Setup para Miatoll (Qualcomm SM6250)
+          # AnyKernel3 Setup for Miatoll (Qualcomm SM6250)
           properties() { '
           kernel.string=Miatoll NetHunter Kernel por ${{ github.actor }}
           do.devicecheck=0
@@ -156,12 +156,7 @@ jobs:
           supported.patchlevels=
           '; }
 
-          # Asignacion explicita e infalible (sin fallback a 'auto')
-          block=/dev/block/bootdevice/by-name/boot;
-          [ -e "$block" ] || block=/dev/block/by-name/boot;
-          [ -e "$block" ] || block=/dev/block/platform/soc/1d84000.ufshc/by-name/boot;
-          [ -e "$block" ] || block=/dev/block/sde51;
-
+          block=/dev/block/sde51;
           is_slot_device=0;
           ramdisk_build_dts=0;
 
@@ -171,7 +166,6 @@ jobs:
           write_boot;
           EOF
 
-          # Limpieza de sangria para evitar errores de sintaxis en la consola de TWRP
           sed -i 's/^[ \t]*//' AnyKernel3/anykernel.sh
 
           echo "=== VERIFICACIÓN DEL ARCHIVO ANYKERNEL.SH GENERADO ==="
