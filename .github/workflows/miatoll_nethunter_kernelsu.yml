@@ -41,15 +41,22 @@ jobs:
           cd android-kernel/scripts
           sed -i 's/ -dirty//g' setlocalversion
 
-      - name: Setup Official KernelSU
+      - name: Setup KernelSU-Next
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s main
+          curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
 
       - name: Inject NetHunter & Privacy Patches into Native Defconfig
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
           DEFCONFIG="arch/arm64/configs/vendor/xiaomi/miatoll_defconfig"
+          
+          # 0. Integración de KernelSU-Next y Kprobes
+          echo "CONFIG_KSU=y" >> $DEFCONFIG
+          echo "CONFIG_KSU_DEBUG=n" >> $DEFCONFIG
+          echo "CONFIG_KPROBES=y" >> $DEFCONFIG
+          echo "CONFIG_HAVE_KPROBES=y" >> $DEFCONFIG
+          echo "CONFIG_KRETPROBES=y" >> $DEFCONFIG
           
           # 1. Comunicacion IPC entre procesos
           echo "CONFIG_SYSVIPC=y" >> $DEFCONFIG
