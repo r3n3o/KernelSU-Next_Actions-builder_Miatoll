@@ -51,28 +51,28 @@ jobs:
           cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
           DEFCONFIG="arch/arm64/configs/vendor/xiaomi/miatoll_defconfig"
           
-          # 1. Comunicación IPC entre procesos (Requerido por herramientas de auditoría)
+          # 1. Comunicacion IPC entre procesos
           echo "CONFIG_SYSVIPC=y" >> $DEFCONFIG
           echo "CONFIG_SYSVIPC_SYSCTL=y" >> $DEFCONFIG
           
-          # 2. Soporte de Módulos dinámicos
+          # 2. Soporte de Modulos dinamicos
           echo "CONFIG_MODULES=y" >> $DEFCONFIG
           echo "CONFIG_MODULE_UNLOAD=y" >> $DEFCONFIG
           
-          # 3. Pila inalámbrica e inyección de paquetes WiFi
+          # 3. Pila inalambrica e inyeccion de paquetes WiFi
           echo "CONFIG_WIRELESS=y" >> $DEFCONFIG
           echo "CONFIG_CFG80211=y" >> $DEFCONFIG
           echo "CONFIG_MAC80211=y" >> $DEFCONFIG
           echo "CONFIG_CFG80211_WEXT=y" >> $DEFCONFIG
           
-          # 4. Controladores para tarjetas de red externas OTG (Atheros, Realtek, Ralink)
+          # 4. Controladores para tarjetas de red externas OTG
           echo "CONFIG_ATH_CARDS=m" >> $DEFCONFIG
           echo "CONFIG_ATH9K_HTC=m" >> $DEFCONFIG
           echo "CONFIG_RTL8187=m" >> $DEFCONFIG
           echo "CONFIG_RT2X00=m" >> $DEFCONFIG
           echo "CONFIG_RT2800USB=m" >> $DEFCONFIG
           
-          # 5. Emulación HID y Gadget USB (Ataques BadUSB)
+          # 5. Emulacion HID y Gadget USB (Ataques BadUSB)
           echo "CONFIG_USB_G_ANDROID=y" >> $DEFCONFIG
           echo "CONFIG_USB_F_HID=y" >> $DEFCONFIG
           echo "CONFIG_USB_CONFIGFS_F_HID=y" >> $DEFCONFIG
@@ -139,8 +139,7 @@ jobs:
           cp android-kernel/out/arch/arm64/boot/$KERNEL_FILE_NAME AnyKernel3/$KERNEL_FILE_NAME
 
           cat << 'EOF' > AnyKernel3/anykernel.sh
-          # AnyKernel3 Script para Miatoll (Qualcomm SM6250)
-
+          # AnyKernel3 Setup for Miatoll (Qualcomm SM6250)
           properties() { '
           kernel.string=Miatoll NetHunter Kernel por ${{ github.actor }}
           do.devicecheck=0
@@ -157,15 +156,7 @@ jobs:
           supported.patchlevels=
           '; }
 
-          # Asignacion explicita de la particion /boot detectada en el mapa UFS de TWRP
-          if [ -e /dev/block/sde51 ]; then
-            block=/dev/block/sde51;
-          elif [ -e /dev/block/by-name/boot ]; then
-            block=/dev/block/by-name/boot;
-          else
-            block=auto;
-          fi;
-
+          block=/dev/block/sde51;
           is_slot_device=0;
           ramdisk_build_dts=0;
 
@@ -175,7 +166,6 @@ jobs:
           write_boot;
           EOF
 
-          # Limpieza de sangria YAML para que AnyKernel3 interprete la sintaxis limpia
           sed -i 's/^[ \t]*//' AnyKernel3/anykernel.sh
 
           echo "=== VERIFICACIÓN DEL ARCHIVO ANYKERNEL.SH GENERADO ==="
