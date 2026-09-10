@@ -1,11 +1,17 @@
+<div align="center">
+
 # Miatoll NetHunter & KernelSU-Next Kernel
+
+Automated continuous integration pipeline building a Kali NetHunter and KernelSU-Next enabled Linux 4.14 kernel for Xiaomi SM6250 devices, packaged as a flashable AnyKernel3 zip.
+
+<br />
 
 [![Build Status](https://img.shields.io/github/actions/workflow/status/r3n3o/KernelSU-Next_Actions-builder_Miatoll/miatoll_nethunter_kernelsu.yml?branch=main&style=flat-square&label=Build)](https://github.com/r3n3o/KernelSU-Next_Actions-builder_Miatoll/actions)
 [![Kernel](https://img.shields.io/badge/Kernel-Linux%204.14%20(SM6250)-0052cc?style=flat-square)](https://github.com/crdroidandroid/android_kernel_xiaomi_sm6250)
 [![Root](https://img.shields.io/badge/Root-KernelSU--Next-0e8a16?style=flat-square)](https://github.com/rifsxd/KernelSU-Next)
 [![Security](https://img.shields.io/badge/Security-Kali%20NetHunter-b60205?style=flat-square)](https://www.kali.org)
 
-Automated continuous integration pipeline building a Kali NetHunter and KernelSU-Next enabled Linux 4.14 kernel for Xiaomi SM6250 devices, packaged as a flashable AnyKernel3 zip.
+</div>
 
 ---
 
@@ -14,7 +20,7 @@ Automated continuous integration pipeline building a Kali NetHunter and KernelSU
 Unified build for the Xiaomi Snapdragon 720G (SM6250) platform:
 
 | Codename | Device | SoC |
-| :--- | :--- | :--- |
+| :---: | :---: | :---: |
 | `joyeuse` | Xiaomi Redmi Note 9 Pro (Global / EU) | Qualcomm Snapdragon 720G |
 | `curtana` | Xiaomi Redmi Note 9S / 9 Pro (India) | Qualcomm Snapdragon 720G |
 | `gram` | POCO M2 Pro | Qualcomm Snapdragon 720G |
