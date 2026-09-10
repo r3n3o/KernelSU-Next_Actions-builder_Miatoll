@@ -41,32 +41,10 @@ jobs:
           cd android-kernel/scripts
           sed -i 's/ -dirty//g' setlocalversion
 
-      - name: Setup KernelSU-Next (Legacy for Non-GKI 4.14)
+      - name: Setup KernelSU (Official v0.9.5 for Non-GKI 4.14)
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-          curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/legacy/kernel/setup.sh" | bash -s legacy
-          
-          echo "[+] Patching KernelSU-Next legacy source for crash prevention on Linux 4.14 non-GKI..."
-          
-          # 1. Patch NULL pointer dereference in sucompat.c when regs is NULL
-          SUCOMPAT_SRC="drivers/kernelsu/feature/sucompat.c"
-          if [ -f "$SUCOMPAT_SRC" ]; then
-            sed -i 's/const char __user \*const __user \*argv_user =.*/const char __user *const __user *argv_user = regs ? (const char __user *const __user *)PT_REGS_PARM2(regs) : NULL;/g' "$SUCOMPAT_SRC"
-          fi
-          
-          # 2. Patch hook_manager.c to pass valid regs and id to ksu_handle_execve_sucompat
-          HOOK_MGR_SRC="drivers/kernelsu/hook/hook_manager.c"
-          if [ -f "$HOOK_MGR_SRC" ]; then
-            sed -i 's/ksu_handle_execve_sucompat(filename_user, NULL, NULL);/ksu_handle_execve_sucompat(filename_user, id, regs);/g' "$HOOK_MGR_SRC"
-          fi
-          
-          # 3. Patch undefined symbol ksu_input_hook in selinux_hide.c
-          SELINUX_HIDE_SRC="drivers/kernelsu/feature/selinux_hide.c"
-          if [ -f "$SELINUX_HIDE_SRC" ]; then
-            sed -i 's/extern bool ksu_input_hook.*/bool ksu_input_hook __read_mostly __attribute__((weak)) = false;/g' "$SELINUX_HIDE_SRC"
-            # Set selinux_hide default to false to prevent libselinux/mmap crash on early Android init
-            sed -i 's/static bool ksu_selinux_hide_is_enabled __read_mostly = true;/static bool ksu_selinux_hide_is_enabled __read_mostly = false;/g' "$SELINUX_HIDE_SRC"
-          fi
+          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.9.5
 
       - name: Inject NetHunter, Wireless & Security Drivers into Native Defconfig
         run: |
@@ -80,7 +58,7 @@ jobs:
             sed -i '1s/^/#define htc_init ath9k_htc_init_internal\n#define htc_connect_service ath9k_htc_connect_service_internal\n#define htc_send ath9k_htc_send_internal\n#define htc_send_epid ath9k_htc_send_epid_internal\n#define htc_stop ath9k_htc_stop_internal\n#define htc_start ath9k_htc_start_internal\n#define htc_sta_drain ath9k_htc_sta_drain_internal\n/' $HTC_HEADER
           fi
           
-          # 0. KernelSU-Next y Kprobes
+          # 0. KernelSU y Kprobes
           echo "CONFIG_KSU=y" >> $DEFCONFIG
           echo "CONFIG_KSU_DEBUG=n" >> $DEFCONFIG
           echo "CONFIG_KPROBES=y" >> $DEFCONFIG
@@ -230,17 +208,6 @@ jobs:
             echo "🚨 ERROR: No se encontró ningún binario Image válido en $BOOT_DIR"
             exit 1
           fi
-          
-          # Verificar y preparar DTB para AnyKernel3
-          if [ -f "$BOOT_DIR/dtb.img" ]; then
-            cp "$BOOT_DIR/dtb.img" $GITHUB_WORKSPACE/kernel_workspace/dtb
-            echo "HAVE_DTB=true" >> $GITHUB_ENV
-            echo "✅ ¡dtb.img detectado y copiado como dtb!"
-          elif [ -f "$BOOT_DIR/dtb" ]; then
-            cp "$BOOT_DIR/dtb" $GITHUB_WORKSPACE/kernel_workspace/dtb
-            echo "HAVE_DTB=true" >> $GITHUB_ENV
-            echo "✅ ¡dtb detectado!"
-          fi
 
       - name: Make AnyKernel3
         run: |
@@ -252,14 +219,8 @@ jobs:
           cd $GITHUB_WORKSPACE/kernel_workspace
           git clone https://github.com/osm0sis/AnyKernel3 --depth=1 AnyKernel3
           
-          # Copiar el binario del kernel
+          # Copiar el binario del kernel Image
           cp "android-kernel/out/arch/arm64/boot/$KERNEL_FILE_NAME" AnyKernel3/$KERNEL_FILE_NAME
-          
-          # Copiar el archivo DTB emparejado si existe
-          if [ "$HAVE_DTB" = "true" ] && [ -f "dtb" ]; then
-            cp dtb AnyKernel3/dtb
-            echo "[+] Archivo dtb copiado en AnyKernel3."
-          fi
 
           # Copiar el archivo estático de configuración anykernel.sh del repositorio
           cp $GITHUB_WORKSPACE/.github/anykernel/anykernel.sh AnyKernel3/anykernel.sh
