@@ -45,6 +45,13 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
           curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/legacy/kernel/setup.sh" | bash -s legacy
+          
+          # Patch undefined symbol ksu_input_hook in selinux_hide.c for Linux 4.14 Kprobes mode
+          SELINUX_HIDE_SRC="drivers/kernelsu/feature/selinux_hide.c"
+          if [ -f "$SELINUX_HIDE_SRC" ]; then
+            echo "[+] Patching ksu_input_hook weak symbol definition..."
+            sed -i 's/extern bool ksu_input_hook.*/bool ksu_input_hook __read_mostly __attribute__((weak)) = false;/g' "$SELINUX_HIDE_SRC"
+          fi
 
       - name: Inject NetHunter, Wireless & Security Drivers into Native Defconfig
         run: |
