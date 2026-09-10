@@ -41,10 +41,10 @@ jobs:
           cd android-kernel/scripts
           sed -i 's/ -dirty//g' setlocalversion
 
-      - name: Setup KernelSU-Next
+      - name: Setup KernelSU-Next (Legacy for Non-GKI 4.14)
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-          curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
+          curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/legacy/kernel/setup.sh" | bash -s legacy
           
           # Patch missing syscall_fn_t on non-GKI Linux 4.14 arm64 kernel
           python3 -c "
