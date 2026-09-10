@@ -7,7 +7,7 @@ properties() { '
 kernel.string=Miatoll NetHunter Kernel
 do.devicecheck=0
 do.modules=0
-do.systemless=1
+do.systemless=0
 do.cleanup=1
 do.cleanuponabort=0
 device.name1=miatoll
@@ -21,13 +21,15 @@ supported.vendorpatchlevels=
 '; } # end properties
 
 ### AnyKernel install
-# boot shell variables (AK3 standard uppercase + fallback)
+# boot shell variables
 BLOCK=boot;
 block=boot;
 IS_SLOT_DEVICE=0;
 is_slot_device=0;
 RAMDISK_COMPRESSION=auto;
-PATCH_VBMETA_FLAG=auto;
+ramdisk_compression=auto;
+PATCH_VBMETA_FLAG=0;
+patch_vbmeta_flag=0;
 
 # import functions/variables and setup patching (DO NOT REMOVE)
 . tools/ak3-core.sh;
