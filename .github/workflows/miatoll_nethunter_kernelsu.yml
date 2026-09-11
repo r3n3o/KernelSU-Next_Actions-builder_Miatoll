@@ -187,6 +187,35 @@ jobs:
           with open("drivers/kernelsu/apk_sign.c", "w") as f:
               f.write(apk_c)
           print("[+] Successfully patched apk_sign.c to authorize KernelSU-Next Manager")
+
+          # 7. fs/namei.c (throne tracker rename hook for package monitoring)
+          with open("fs/namei.c", "r") as f:
+              namei_c = f.read()
+
+          namei_decl = """
+          #ifdef CONFIG_KSU
+          extern int ksu_handle_rename(struct dentry *old_dentry, struct dentry *new_dentry);
+          #endif
+          """
+          namei_call = """
+          #ifdef CONFIG_KSU
+          	ksu_handle_rename(old_dentry, new_dentry);
+          #endif
+          """
+          namei_c, n7 = re.subn(r"((?:static\s+)?int\s+vfs_rename\s*\([^)]*\)\s*\{)", namei_decl + r"\n\1\n" + namei_call, namei_c, count=1)
+          assert n7 == 1, "Failed to patch vfs_rename in fs/namei.c"
+          with open("fs/namei.c", "w") as f:
+              f.write(namei_c)
+          print("[+] Successfully patched fs/namei.c with KernelSU rename hook")
+
+          # 8. drivers/kernelsu/core_hook.c (ARM64 SECCOMP atomic clear)
+          with open("drivers/kernelsu/core_hook.c", "r") as f:
+              core_c = f.read()
+
+          core_c = core_c.replace("current_thread_info()->flags &= ~(TIF_SECCOMP | _TIF_SECCOMP);", "clear_tsk_thread_flag(current, TIF_SECCOMP);")
+          with open("drivers/kernelsu/core_hook.c", "w") as f:
+              f.write(core_c)
+          print("[+] Successfully patched core_hook.c for ARM64 SECCOMP clearing")
           '
           echo "=== VERIFICACIÓN DE PARCHES VFS & KERNELSU ==="
           git diff fs/ kernel/sys.c drivers/kernelsu/

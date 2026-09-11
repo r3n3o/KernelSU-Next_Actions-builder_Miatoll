@@ -44,3 +44,10 @@ rm -f $SPLITIMG/avb* $SPLITIMG/*.avb 2>/dev/null;
 
 flash_boot;
 ## end boot install
+
+# Ensure /data/adb exists for KernelSU daemon and modules
+mount /data 2>/dev/null;
+if [ -d /data ]; then
+  mkdir -p /data/adb /data/adb/modules /data/adb/ksu 2>/dev/null;
+  chmod 755 /data/adb 2>/dev/null;
+fi;
