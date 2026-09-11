@@ -225,6 +225,45 @@ jobs:
           cd $GITHUB_WORKSPACE/kernel_workspace
           git clone https://github.com/osm0sis/AnyKernel3 --depth=1 AnyKernel3
           
+          # Patch ak3-core.sh to strip AVB0 footer on repack to resolve 4864 vs 2432 vbmeta size mismatch in Android 16
+          python3 -c '
+          import re
+
+          with open("AnyKernel3/tools/ak3-core.sh", "r") as f:
+              content = f.read()
+
+          strip_fn = """
+          strip_avb_footer() {
+            local target="$1";
+            [ ! -f "$target" ] && return 0;
+            local fsize=$(wc -c < "$target" 2>/dev/null | tr -d " ");
+            [ -z "$fsize" ] || [ "$fsize" -le 64 ] && return 0;
+            local magic=$(tail -c 64 "$target" 2>/dev/null | head -c 4);
+            if [ "$magic" = "AVB0" ]; then
+              ui_print " ";
+              ui_print "[!] Detected AVB0 footer on $target";
+              ui_print "[+] Stripping AVB0 footer to fix 4864 vs 2432 vbmeta size mismatch...";
+              local hex_size=$(od -A n -j $((fsize - 56)) -N 8 -t x1 "$target" 2>/dev/null | tr -d " \\n\\t\\r");
+              if [ -n "$hex_size" ]; then
+                local orig_size=$((0x$hex_size));
+                if [ "$orig_size" -gt 0 ] && [ "$orig_size" -lt "$fsize" ]; then
+                  ui_print "[+] Truncating image from $fsize bytes to original size: $orig_size bytes";
+                  head -c "$orig_size" "$target" > "${target}.stripped";
+                  mv -f "${target}.stripped" "$target";
+                fi;
+              fi;
+            fi;
+          }
+          """
+
+          content = strip_fn + "\n" + content
+          content = re.sub(r"(magiskboot\s+repack\s+[^;]+boot-new\.img;?)", r"\1\n    strip_avb_footer $AKHOME/boot-new.img;", content)
+
+          with open("AnyKernel3/tools/ak3-core.sh", "w") as f:
+              f.write(content)
+          print("[+] Successfully patched AnyKernel3 ak3-core.sh with AVB0 stripper!")
+          '
+
           # Copiar el binario del kernel Image
           cp "android-kernel/out/arch/arm64/boot/$KERNEL_FILE_NAME" AnyKernel3/$KERNEL_FILE_NAME
 
@@ -239,8 +278,14 @@ jobs:
           cd AnyKernel3
           zip -r9 ../Miatoll-NetHunter-Kernel.zip *
 
-      - name: Upload Artifact
+      - name: Upload AnyKernel3 Flashable ZIP
         uses: actions/upload-artifact@v4
         with:
           name: AK3-Miatoll-NetHunter-KSU
           path: kernel_workspace/Miatoll-NetHunter-Kernel.zip
+
+      - name: Upload Standalone Image.gz (Direct Flash)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Miatoll-Kernel-Image-GZ
+          path: kernel_workspace/android-kernel/out/arch/arm64/boot/Image.gz

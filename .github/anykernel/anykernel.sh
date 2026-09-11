@@ -38,5 +38,9 @@ no_vbmeta_partition_patch=1;
 
 # boot install
 dump_boot;
+
+# Eliminate any extracted AVB metadata before repacking to keep clean Android v2 header
+rm -f $SPLITIMG/avb* $SPLITIMG/*.avb 2>/dev/null;
+
 write_boot;
 ## end boot install
