@@ -3,7 +3,7 @@ import re
 import sys
 
 def main():
-    print("[*] Starting KernelSU VFS & Security Hook Injection (KernelSU-Next Compatibility Mode)...")
+    print("[*] Starting KernelSU-Next VFS, Security & Supercall Integration...")
 
     # 1. fs/exec.c (execveat hook)
     with open("fs/exec.c", "r", encoding="utf-8") as f:
@@ -120,9 +120,7 @@ extern int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
     # 6. apk_sign.c (Authorize KernelSU-Next Manager com.rifsxd.ksunext)
     apk_candidates = [
         "KernelSU/kernel/apk_sign.c",
-        "drivers/kernelsu/apk_sign.c",
-        "drivers/kernelsu/manager/apk_sign.c",
-        "KernelSU-Next/kernel/manager/apk_sign.c"
+        "drivers/kernelsu/apk_sign.c"
     ]
     apk_path = next((p for p in apk_candidates if os.path.exists(p)), None)
     assert apk_path, "Failed to locate apk_sign.c"
@@ -155,7 +153,7 @@ extern int ksu_handle_rename(struct dentry *old_dentry, struct dentry *new_dentr
         f.write(namei_c)
     print("[+] Successfully patched fs/namei.c with KernelSU rename hook")
 
-    # 8. core_hook.c (ARM64 SECCOMP atomic clear)
+    # 8. core_hook.c (ARM64 SECCOMP atomic clear & UAPI version report in CMD_GET_VERSION)
     core_candidates = [
         "KernelSU/kernel/core_hook.c",
         "drivers/kernelsu/core_hook.c"
@@ -165,9 +163,28 @@ extern int ksu_handle_rename(struct dentry *old_dentry, struct dentry *new_dentr
         with open(core_path, "r", encoding="utf-8") as f:
             core_c = f.read()
         core_c = core_c.replace("current_thread_info()->flags &= ~(TIF_SECCOMP | _TIF_SECCOMP);", "clear_tsk_thread_flag(current, TIF_SECCOMP);")
+        
+        # Inject UAPI version in CMD_GET_VERSION
+        core_target = "if (arg2 == CMD_GET_VERSION) {"
+        core_repl = """if (arg2 == CMD_GET_VERSION) {
+\t\tu32 uapi_ver = 2;
+\t\tif (arg5 && copy_to_user(arg5, &uapi_ver, sizeof(uapi_ver))) {
+\t\t\tpr_err("prctl reply uapi error, cmd: %lu\\n", arg2);
+\t\t}"""
+        if core_target in core_c and "uapi_ver = 2" not in core_c:
+            core_c = core_c.replace(core_target, core_repl, 1)
+
+        # Inject ksu_install_fd on become_manager / from_manager
+        mgr_target = "if (arg2 == CMD_BECOME_MANAGER) {"
+        mgr_repl = """if (arg2 == CMD_BECOME_MANAGER) {
+\t\textern int ksu_install_fd(void);
+\t\tksu_install_fd();"""
+        if mgr_target in core_c and "ksu_install_fd" not in core_c:
+            core_c = core_c.replace(mgr_target, mgr_repl, 1)
+            
         with open(core_path, "w", encoding="utf-8") as f:
             f.write(core_c)
-        print(f"[+] Successfully patched {core_path} for ARM64 SECCOMP clearing")
+        print(f"[+] Successfully patched {core_path} for SECCOMP clearing, UAPI v2 reporting, and manager fd installation")
 
     # 9. kernel/seccomp.c (Allow KSU prctl and reboot supercalls past Android SECCOMP filter without SIGSYS trap)
     with open("kernel/seccomp.c", "r", encoding="utf-8") as f:
@@ -185,11 +202,10 @@ extern int ksu_handle_rename(struct dentry *old_dentry, struct dentry *new_dentr
         f.write(seccomp_c)
     print("[+] Successfully patched kernel/seccomp.c with KSU SECCOMP bypass")
 
-    # 10. ksud.c / ksud_integration.c (Auto-create /data/adb directories on post-fs-data)
+    # 10. ksud.c (Auto-create /data/adb directories on post-fs-data)
     ksud_candidates = [
         "KernelSU/kernel/ksud.c",
-        "drivers/kernelsu/ksud.c",
-        "drivers/kernelsu/runtime/ksud_integration.c"
+        "drivers/kernelsu/ksud.c"
     ]
     ksud_path = next((p for p in ksud_candidates if os.path.exists(p)), None)
     assert ksud_path, "Failed to locate ksud source file"
@@ -204,7 +220,217 @@ extern int ksu_handle_rename(struct dentry *old_dentry, struct dentry *new_dentr
         f.write(ksud_c)
     print(f"[+] Successfully patched {ksud_path} with /data/adb directory creation")
 
-    # 11. KernelSU Makefile (Set KSU_VERSION to 33214 for KernelSU-Next Manager compatibility)
+    # 11. Create supercall.c in KernelSU/kernel/ for [ksu_driver] ioctl interface
+    supercall_dir = "KernelSU/kernel" if os.path.exists("KernelSU/kernel") else "drivers/kernelsu"
+    supercall_path = os.path.join(supercall_dir, "supercall.c")
+    supercall_code = """
+#include <linux/anon_inodes.h>
+#include <linux/err.h>
+#include <linux/fdtable.h>
+#include <linux/file.h>
+#include <linux/fs.h>
+#include <linux/slab.h>
+#include <linux/syscalls.h>
+#include <linux/uaccess.h>
+#include <linux/version.h>
+
+#include "ksu.h"
+#include "allowlist.h"
+#include "manager.h"
+
+#define KSU_INSTALL_MAGIC1 0xDEADBEEF
+#define KSU_INSTALL_MAGIC2 0xCAFEBABE
+
+struct ksu_get_info_cmd {
+    __u32 version;
+    __u32 flags;
+    __u32 features;
+    __u32 uapi_version;
+};
+
+struct ksu_get_hook_mode_cmd {
+    char mode[16];
+};
+
+struct ksu_get_version_tag_cmd {
+    char tag[32];
+};
+
+struct ksu_report_event_cmd {
+    __u32 event;
+};
+
+extern void escape_to_root(void);
+extern void on_post_fs_data(void);
+
+static int anon_ksu_release(struct inode *inode, struct file *filp)
+{
+    return 0;
+}
+
+static long anon_ksu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
+{
+    void __user *argp = (void __user *)arg;
+    unsigned int nr = _IOC_NR(cmd);
+
+    if (_IOC_TYPE(cmd) != 'K')
+        return -ENOTTY;
+
+    switch (nr) {
+    case 1: // KSU_IOCTL_GRANT_ROOT
+        if (is_manager() || ksu_is_allow_uid(current_uid().val)) {
+            escape_to_root();
+            return 0;
+        }
+        return -EPERM;
+
+    case 2: { // KSU_IOCTL_GET_INFO
+        struct ksu_get_info_cmd info = {
+            .version = 33214,
+            .flags = is_manager() ? (1 << 2) : 0,
+            .features = 10,
+            .uapi_version = 2
+        };
+        if (copy_to_user(argp, &info, sizeof(info)))
+            return -EFAULT;
+        return 0;
+    }
+
+    case 3: { // KSU_IOCTL_REPORT_EVENT
+        struct ksu_report_event_cmd evt;
+        if (copy_from_user(&evt, argp, sizeof(evt)))
+            return -EFAULT;
+        if (evt.event == EVENT_POST_FS_DATA) {
+            on_post_fs_data();
+        }
+        return 0;
+    }
+
+    case 5: { // KSU_IOCTL_CHECK_SAFEMODE
+        __u8 in_safe_mode = 0;
+        if (copy_to_user(argp, &in_safe_mode, sizeof(in_safe_mode)))
+            return -EFAULT;
+        return 0;
+    }
+
+    case 10: { // KSU_IOCTL_GET_MANAGER_APPID
+        __u32 appid = ksu_get_manager_uid();
+        if (copy_to_user(argp, &appid, sizeof(appid)))
+            return -EFAULT;
+        return 0;
+    }
+
+    case 11: { // KSU_IOCTL_GET_APP_PROFILE
+        struct app_profile profile;
+        if (copy_from_user(&profile, argp, sizeof(profile)))
+            return -EFAULT;
+        ksu_get_app_profile(&profile);
+        if (copy_to_user(argp, &profile, sizeof(profile)))
+            return -EFAULT;
+        return 0;
+    }
+
+    case 12: { // KSU_IOCTL_SET_APP_PROFILE
+        struct app_profile profile;
+        if (copy_from_user(&profile, argp, sizeof(profile)))
+            return -EFAULT;
+        ksu_set_app_profile(&profile, true);
+        return 0;
+    }
+
+    case 98: { // KSU_IOCTL_GET_HOOK_MODE
+        struct ksu_get_hook_mode_cmd mode = {0};
+        strncpy(mode.mode, "Manual", sizeof(mode.mode) - 1);
+        if (copy_to_user(argp, &mode, sizeof(mode)))
+            return -EFAULT;
+        return 0;
+    }
+
+    case 99: { // KSU_IOCTL_GET_VERSION_TAG
+        struct ksu_get_version_tag_cmd tag = {0};
+        strncpy(tag.tag, "v3.3.0", sizeof(tag.tag) - 1);
+        if (copy_to_user(argp, &tag, sizeof(tag)))
+            return -EFAULT;
+        return 0;
+    }
+
+    default:
+        return -ENOTTY;
+    }
+}
+
+static const struct file_operations anon_ksu_fops = {
+    .owner = THIS_MODULE,
+    .unlocked_ioctl = anon_ksu_ioctl,
+    .compat_ioctl = anon_ksu_ioctl,
+    .release = anon_ksu_release,
+};
+
+int ksu_install_fd(void)
+{
+    struct file *filp;
+    int fd;
+
+    fd = get_unused_fd_flags(O_CLOEXEC);
+    if (fd < 0) {
+        pr_err("ksu_install_fd: failed to get unused fd\\n");
+        return fd;
+    }
+
+    filp = anon_inode_getfile("[ksu_driver]", &anon_ksu_fops, NULL, O_RDWR | O_CLOEXEC);
+    if (IS_ERR(filp)) {
+        pr_err("ksu_install_fd: failed to create anon inode file\\n");
+        put_unused_fd(fd);
+        return PTR_ERR(filp);
+    }
+
+    fd_install(fd, filp);
+    pr_info("ksu fd installed: %d for pid %d\\n", fd, current->pid);
+    return fd;
+}
+
+int ksu_handle_reboot(int magic1, int magic2, unsigned int cmd, void __user *arg)
+{
+    if (magic1 == (int)KSU_INSTALL_MAGIC1 && magic2 == (int)KSU_INSTALL_MAGIC2) {
+        int fd = ksu_install_fd();
+        if (fd >= 0 && arg) {
+            if (copy_to_user(arg, &fd, sizeof(fd))) {
+                pr_err("ksu_handle_reboot: copy_to_user failed\\n");
+            }
+        }
+        return 0;
+    }
+    return -EINVAL;
+}
+"""
+    with open(supercall_path, "w", encoding="utf-8") as f:
+        f.write(supercall_code)
+    print(f"[+] Successfully created {supercall_path} ([ksu_driver] supercall handler)")
+
+    # 12. Patch kernel/reboot.c for reboot supercall
+    with open("kernel/reboot.c", "r", encoding="utf-8") as f:
+        rb_c = f.read()
+
+    rb_decl = """
+#ifdef CONFIG_KSU
+extern int ksu_handle_reboot(int magic1, int magic2, unsigned int cmd, void __user *arg);
+#endif
+"""
+    rb_call = """
+#ifdef CONFIG_KSU
+	if (magic1 == (int)0xdeadbeef && magic2 == (int)0xcafebabe) {
+		ksu_handle_reboot(magic1, magic2, cmd, arg);
+		return 0;
+	}
+#endif
+"""
+    rb_c, n_rb = re.subn(r"(SYSCALL_DEFINE4\s*\(\s*reboot\s*,[^{]*\{)", rb_decl + r"\n\1\n" + rb_call, rb_c, count=1)
+    assert n_rb == 1, "Failed to patch kernel/reboot.c"
+    with open("kernel/reboot.c", "w", encoding="utf-8") as f:
+        f.write(rb_c)
+    print("[+] Successfully patched kernel/reboot.c with KernelSU reboot supercall")
+
+    # 13. Patch KernelSU Makefile (Compile supercall.o & set KSU_VERSION to 33214)
     mk_candidates = [
         "KernelSU/kernel/Makefile",
         "drivers/kernelsu/Makefile"
@@ -218,11 +444,13 @@ extern int ksu_handle_rename(struct dentry *old_dentry, struct dentry *new_dentr
             mk_c = mk_c.replace(target_version_expr, "$(eval KSU_VERSION=33214)")
         if "ccflags-y += -DKSU_VERSION=16" in mk_c:
             mk_c = mk_c.replace("ccflags-y += -DKSU_VERSION=16", "ccflags-y += -DKSU_VERSION=33214")
+        if "kernelsu-objs += supercall.o" not in mk_c:
+            mk_c = mk_c.replace("kernelsu-objs += core_hook.o", "kernelsu-objs += core_hook.o\nkernelsu-objs += supercall.o")
         with open(mk_path, "w", encoding="utf-8") as f:
             f.write(mk_c)
-        print(f"[+] Successfully set KSU_VERSION=33214 in {mk_path} (KernelSU-Next Manager compatible)")
+        print(f"[+] Successfully updated {mk_path} with supercall.o and KSU_VERSION=33214")
 
-    print("[*] All KernelSU VFS & Security patches applied successfully with KernelSU-Next version 33214!")
+    print("[*] All KernelSU-Next VFS, Security & Supercall hooks applied successfully!")
 
 if __name__ == "__main__":
     main()
