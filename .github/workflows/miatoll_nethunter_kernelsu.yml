@@ -27,10 +27,11 @@ jobs:
           sudo apt-get install -y git ccache automake flex lzop bison gperf build-essential zip curl zlib1g-dev g++-multilib bzip2 libbz2-dev liblz4-tool make squashfs-tools dpkg-dev libssl-dev python3 libelf-dev bc libc6-dev-i386 gcc-multilib lld llvm
           mkdir -p $GITHUB_WORKSPACE/kernel_workspace
 
-      - name: Download crDroid Specific Toolchains
+      - name: Download crDroid 16.0 Native Toolchains (Clang 19 r530567 & GCC 4.9)
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace
-          git clone --depth=1 https://github.com/crdroidandroid/android_prebuilts_clang_host_linux-x86_clang-6443078 clang
+          mkdir -p clang
+          curl -LSs "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r530567.tar.gz" | tar -xz -C clang
           git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 gcc64
           git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9 gcc32
 
@@ -179,6 +180,11 @@ jobs:
             CROSS_COMPILE=${GITHUB_WORKSPACE}/kernel_workspace/gcc64/bin/aarch64-linux-android- \
             CROSS_COMPILE_ARM32=${GITHUB_WORKSPACE}/kernel_workspace/gcc32/bin/arm-linux-androideabi- \
             LD=ld.lld \
+            AR=llvm-ar \
+            NM=llvm-nm \
+            OBJCOPY=llvm-objcopy \
+            OBJDUMP=llvm-objdump \
+            STRIP=llvm-strip \
             CONFIG_NO_ERROR_ON_MISMATCH=y \
             KCFLAGS=-w
           "
