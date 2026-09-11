@@ -216,9 +216,25 @@ jobs:
           with open("drivers/kernelsu/core_hook.c", "w") as f:
               f.write(core_c)
           print("[+] Successfully patched core_hook.c for ARM64 SECCOMP clearing")
+
+          # 9. kernel/seccomp.c (Allow KSU prctl past Android SECCOMP filter without SIGSYS trap)
+          with open("kernel/seccomp.c", "r") as f:
+              seccomp_c = f.read()
+
+          seccomp_hook = """
+          #ifdef CONFIG_KSU
+          	if (sd && sd->args[0] == 0xdeadbeef)
+          		return SECCOMP_RET_ALLOW;
+          #endif
+          """
+          seccomp_c, n9 = re.subn(r"(static\s+u32\s+seccomp_run_filters\s*\([^)]*\)\s*\{)", r"\1\n" + seccomp_hook, seccomp_c, count=1)
+          assert n9 == 1, "Failed to patch seccomp_run_filters in kernel/seccomp.c"
+          with open("kernel/seccomp.c", "w") as f:
+              f.write(seccomp_c)
+          print("[+] Successfully patched kernel/seccomp.c with KSU SECCOMP bypass")
           '
           echo "=== VERIFICACIÓN DE PARCHES VFS & KERNELSU ==="
-          git diff fs/ kernel/sys.c drivers/kernelsu/
+          git diff fs/ kernel/ drivers/kernelsu/
           echo "=============================================="
 
       # Etapa de Inyección de NetHunter Core manteniendo la configuración nativa de módulos de crDroid 16.0
