@@ -174,6 +174,17 @@ extern int ksu_handle_rename(struct dentry *old_dentry, struct dentry *new_dentr
         if core_target in core_c and "uapi_ver = 2" not in core_c:
             core_c = core_c.replace(core_target, core_repl, 1)
 
+        # In ksu_handle_setuid, auto-install ksu driver fd for manager
+        setuid_target = "int ksu_handle_setuid(struct cred *new, const struct cred *old)\n{"
+        setuid_repl = """int ksu_handle_setuid(struct cred *new, const struct cred *old)
+{
+\textern int ksu_install_fd(void);
+\tif (is_manager() || (new && ksu_get_manager_uid() == new->uid.val)) {
+\t\tksu_install_fd();
+\t}"""
+        if setuid_target in core_c and "ksu_install_fd()" not in core_c[core_c.find("int ksu_handle_setuid"):core_c.find("int ksu_handle_setuid")+120]:
+            core_c = core_c.replace(setuid_target, setuid_repl, 1)
+
         # Allow become_manager before from_manager gate and register manager UID
         auth_target = """\tbool from_root = 0 == current_uid().val;
 \tbool from_manager = is_manager();
@@ -193,14 +204,14 @@ extern int ksu_handle_rename(struct dentry *old_dentry, struct dentry *new_dentr
         # Inject become_manager override to install driver fd and reply OK
         mgr_target = "if (arg2 == CMD_BECOME_MANAGER) {"
         mgr_repl = """if (arg2 == CMD_BECOME_MANAGER) {
-\t\textern int ksu_install_fd(void);
-\t\tksu_set_manager_uid(current_uid().val);
-\t\tksu_install_fd();
-\t\tif (copy_to_user(result, &reply_ok, sizeof(reply_ok))) {
-\t\t\tpr_err("become_manager: prctl reply error\\n");
-\t\t}
-\t\treturn 0;
+\textern int ksu_install_fd(void);
+\tksu_set_manager_uid(current_uid().val);
+\tksu_install_fd();
+\tif (copy_to_user(result, &reply_ok, sizeof(reply_ok))) {
+\t\tpr_err("become_manager: prctl reply error\\n");
 \t}
+\treturn 0;
+}
 \tif (false) {"""
         if mgr_target in core_c and "ksu_install_fd" not in core_c:
             core_c = core_c.replace(mgr_target, mgr_repl, 1)
@@ -256,13 +267,40 @@ extern int ksu_handle_rename(struct dentry *old_dentry, struct dentry *new_dentr
 
     ksud_rc_target = '"on post-fs-data\\n"'
     ksud_rc_replacement = '"on post-fs-data\\n\\t    mkdir /data/adb 0755 root root\\n\\t    mkdir /data/adb/ksu 0755 root root\\n\\t    mkdir /data/adb/modules 0755 root root\\n\\t    mkdir /data/adb/post-fs-data.d 0755 root root\\n\\t    mkdir /data/adb/service.d 0755 root root\\n"'
-    assert ksud_rc_target in ksud_c, f"Failed to locate on post-fs-data in {ksud_path}"
-    ksud_c = ksud_c.replace(ksud_rc_target, ksud_rc_replacement, 1)
-    with open(ksud_path, "w", encoding="utf-8") as f:
-        f.write(ksud_c)
+    if "mkdir /data/adb" not in ksud_c:
+        assert ksud_rc_target in ksud_c, f"Failed to locate on post-fs-data in {ksud_path}"
+        ksud_c = ksud_c.replace(ksud_rc_target, ksud_rc_replacement, 1)
+        with open(ksud_path, "w", encoding="utf-8") as f:
+            f.write(ksud_c)
     print(f"[+] Successfully patched {ksud_path} with /data/adb directory creation")
 
-    # 11. Create supercall.c in KernelSU/kernel/ for [ksu_driver] ioctl interface
+    # 11. sucompat.c (Allow Manager, Root, and Shell to execute su for SuperUserViewModel and adb)
+    sucompat_candidates = [
+        "KernelSU/kernel/sucompat.c",
+        "drivers/kernelsu/sucompat.c"
+    ]
+    sucompat_path = next((p for p in sucompat_candidates if os.path.exists(p)), None)
+    if sucompat_path:
+        with open(sucompat_path, "r", encoding="utf-8") as f:
+            suc = f.read()
+
+        suc_header = """#include "manager.h"
+
+static inline bool is_allow_su_compat(uid_t uid) {
+\tif (is_manager() || uid == 0 || uid == 2000)
+\t\treturn true;
+\treturn ksu_is_allow_uid(uid);
+}
+"""
+        if '#include "allowlist.h"' in suc and "is_allow_su_compat" not in suc:
+            suc = suc.replace('#include "allowlist.h"', '#include "allowlist.h"\n' + suc_header, 1)
+            suc = suc.replace('!ksu_is_allow_uid(current_uid().val)', '!is_allow_su_compat(current_uid().val)')
+            suc = suc.replace('!ksu_is_allow_uid(uid)', '!is_allow_su_compat(uid)')
+            with open(sucompat_path, "w", encoding="utf-8") as f:
+                f.write(suc)
+            print(f"[+] Successfully patched {sucompat_path} for Manager, Root, and Shell su access")
+
+    # 12. Create supercall.c in KernelSU/kernel/ for [ksu_driver] ioctl interface
     supercall_dir = "KernelSU/kernel" if os.path.exists("KernelSU/kernel") else "drivers/kernelsu"
     supercall_path = os.path.join(supercall_dir, "supercall.c")
     supercall_code = """
@@ -319,6 +357,8 @@ struct ksu_set_feature_cmd {
 extern void escape_to_root(void);
 extern void on_post_fs_data(void);
 
+static __u64 feature_values[16] = {1, 1, 1, 1, 1, 1, 1, 1};
+
 static int anon_ksu_release(struct inode *inode, struct file *filp)
 {
     return 0;
@@ -334,7 +374,7 @@ static long anon_ksu_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
 
     switch (nr) {
     case 1: // KSU_IOCTL_GRANT_ROOT
-        if (is_manager() || ksu_is_allow_uid(current_uid().val) || current_uid().val == 0) {
+        if (is_manager() || ksu_is_allow_uid(current_uid().val) || current_uid().val == 0 || current_uid().val == 2000) {
             escape_to_root();
             return 0;
         }
@@ -344,7 +384,7 @@ static long anon_ksu_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
         struct ksu_get_info_cmd info = {
             .version = 33214,
             .flags = KSU_GET_INFO_FLAG_MANAGER,
-            .features = 10,
+            .features = 20,
             .uapi_version = 2
         };
         if (copy_to_user(argp, &info, sizeof(info)))
@@ -380,7 +420,7 @@ static long anon_ksu_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
         __u32 uid = 0;
         __u8 allow = 1;
         if (argp && copy_from_user(&uid, argp, sizeof(uid)) == 0) {
-            allow = is_manager() || ksu_is_allow_uid(uid) || (uid == 0);
+            allow = is_manager() || ksu_is_allow_uid(uid) || (uid == 0) || (uid == 2000);
             copy_to_user(argp, &allow, sizeof(allow));
         }
         return 0;
@@ -427,8 +467,12 @@ static long anon_ksu_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
         struct ksu_get_feature_cmd fcmd;
         if (copy_from_user(&fcmd, argp, sizeof(fcmd)))
             return -EFAULT;
-        fcmd.value = 1;
         fcmd.supported = 1;
+        if (fcmd.feature_id < 16) {
+            fcmd.value = feature_values[fcmd.feature_id];
+        } else {
+            fcmd.value = 1;
+        }
         if (copy_to_user(argp, &fcmd, sizeof(fcmd)))
             return -EFAULT;
         return 0;
@@ -438,10 +482,26 @@ static long anon_ksu_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
         struct ksu_set_feature_cmd fcmd;
         if (copy_from_user(&fcmd, argp, sizeof(fcmd)))
             return -EFAULT;
+        if (fcmd.feature_id < 16) {
+            feature_values[fcmd.feature_id] = fcmd.value;
+        }
         return 0;
     }
 
+    case 15: // KSU_IOCTL_GET_WRAPPER_FD
+    case 16: // KSU_IOCTL_MANAGE_MARK
+    case 17: // KSU_IOCTL_NUKE_EXT4_SYSFS
+    case 18: // KSU_IOCTL_ADD_TRY_UMOUNT
     case 19: // KSU_IOCTL_SET_INIT_PGRP
+        return 0;
+
+    case 20: { // KSU_IOCTL_GET_SULOG_FD
+        extern int ksu_install_fd(void);
+        int sfd = ksu_install_fd();
+        return sfd >= 0 ? sfd : 0;
+    }
+
+    case 21: // KSU_IOCTL_DISABLE_ESCAPE_TO_ROOT
         return 0;
 
     case 98: { // KSU_IOCTL_GET_HOOK_MODE
@@ -461,7 +521,7 @@ static long anon_ksu_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
     }
 
     default:
-        return -ENOTTY;
+        return 0;
     }
 }
 
