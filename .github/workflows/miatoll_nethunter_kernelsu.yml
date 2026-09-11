@@ -2,6 +2,9 @@ name: Build Miatoll Hacking Kernel V13 (NetHunter WiFi Fix)
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 env:
   TZ: America/New_York
