@@ -55,13 +55,74 @@ jobs:
           cd android-kernel/scripts
           sed -i 's/ -dirty//g' setlocalversion
 
-      # Etapa de Validación Científica A/B: Compilar kernel 100% puro crDroid 16.0 (sin KSU ni inyecciones)
-      # para aislar la causa raíz y validar la cadena de compilación y empaquetado.
-      - name: Prepare Clean crDroid 16.0 Defconfig
+      - name: Setup KernelSU (Official v0.9.5 for Non-GKI 4.14)
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-          echo "[+] Preparando defconfig nativo puro de crDroid 16.0..."
-          # No se aplican parches de terceros para establecer la línea base de arranque 100% limpia
+          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.9.5
+
+      - name: Inject NetHunter, Security & BadUSB Drivers into Native Defconfig
+        run: |
+          cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+          DEFCONFIG="arch/arm64/configs/vendor/xiaomi/miatoll_defconfig"
+          
+          # 0. KernelSU y Kprobes
+          echo "CONFIG_KSU=y" >> $DEFCONFIG
+          echo "CONFIG_KSU_DEBUG=n" >> $DEFCONFIG
+          echo "CONFIG_KPROBES=y" >> $DEFCONFIG
+          echo "CONFIG_HAVE_KPROBES=y" >> $DEFCONFIG
+          echo "CONFIG_KRETPROBES=y" >> $DEFCONFIG
+          
+          # Deshabilitar firma estricta y modversions para que el kernel acepte todos los controladores vendor de crDroid (.ko)
+          sed -i 's/CONFIG_MODULE_SIG=y/CONFIG_MODULE_SIG=n/g' $DEFCONFIG
+          sed -i 's/CONFIG_MODULE_SIG_FORCE=y/# CONFIG_MODULE_SIG_FORCE is not set/g' $DEFCONFIG
+          sed -i 's/CONFIG_MODULE_SIG_ALL=y/# CONFIG_MODULE_SIG_ALL is not set/g' $DEFCONFIG
+          sed -i 's/CONFIG_MODVERSIONS=y/# CONFIG_MODVERSIONS is not set/g' $DEFCONFIG
+          echo "CONFIG_MODULE_SIG=n" >> $DEFCONFIG
+          echo "# CONFIG_MODULE_SIG_FORCE is not set" >> $DEFCONFIG
+          echo "# CONFIG_MODVERSIONS is not set" >> $DEFCONFIG
+          echo "CONFIG_MODULE_FORCE_LOAD=y" >> $DEFCONFIG
+          
+          # 1. Comunicacion IPC y aislamiento de Namespaces (NetHunter Chroot, Docker, Metasploit)
+          echo "CONFIG_SYSVIPC=y" >> $DEFCONFIG
+          echo "CONFIG_SYSVIPC_SYSCTL=y" >> $DEFCONFIG
+          echo "CONFIG_NAMESPACES=y" >> $DEFCONFIG
+          echo "CONFIG_USER_NS=y" >> $DEFCONFIG
+          echo "CONFIG_PID_NS=y" >> $DEFCONFIG
+          echo "CONFIG_NET_NS=y" >> $DEFCONFIG
+          echo "CONFIG_BLK_DEV_LOOP=y" >> $DEFCONFIG
+          
+          # 2. Adaptadores de Red Ethernet USB OTG (Auditoria de Redes Cableadas)
+          echo "CONFIG_USB_NET_DRIVERS=y" >> $DEFCONFIG
+          echo "CONFIG_USB_USBNET=y" >> $DEFCONFIG
+          echo "CONFIG_USB_NET_AX88179_178A=y" >> $DEFCONFIG
+          echo "CONFIG_USB_NET_AX8817X=y" >> $DEFCONFIG
+          echo "CONFIG_USB_NET_RTL8152=y" >> $DEFCONFIG
+          echo "CONFIG_USB_NET_CDCETHER=y" >> $DEFCONFIG
+          echo "CONFIG_USB_NET_CDC_NCM=y" >> $DEFCONFIG
+          echo "CONFIG_USB_NET_DM9601=y" >> $DEFCONFIG
+          echo "CONFIG_USB_NET_SMSC75XX=y" >> $DEFCONFIG
+          echo "CONFIG_USB_NET_SMSC95XX=y" >> $DEFCONFIG
+          echo "CONFIG_USB_NET_MCS7830=y" >> $DEFCONFIG
+          echo "CONFIG_USB_NET_RNDIS_HOST=y" >> $DEFCONFIG
+          echo "CONFIG_USB_NET_CDC_SUBSET=y" >> $DEFCONFIG
+          
+          # 3. Bluetooth USB Externo
+          echo "CONFIG_BT_HCIBTUSB=y" >> $DEFCONFIG
+          echo "CONFIG_BT_HCIBTUSB_BCM=y" >> $DEFCONFIG
+          echo "CONFIG_BT_HCIBTUSB_RTL=y" >> $DEFCONFIG
+          echo "CONFIG_BT_HCIUSB=y" >> $DEFCONFIG
+          
+          # 4. Radiofrecuencia y Software Defined Radio (RTL-SDR)
+          echo "CONFIG_MEDIA_SUPPORT=y" >> $DEFCONFIG
+          echo "CONFIG_MEDIA_USB_SUPPORT=y" >> $DEFCONFIG
+          echo "CONFIG_MEDIA_DIGITAL_TV_SUPPORT=y" >> $DEFCONFIG
+          echo "CONFIG_DVB_USB_V2=y" >> $DEFCONFIG
+          echo "CONFIG_DVB_USB_RTL28XXU=y" >> $DEFCONFIG
+          
+          # 5. Emulacion USB HID y Mass Storage (BadUSB y DriveDroid)
+          echo "CONFIG_USB_F_HID=y" >> $DEFCONFIG
+          echo "CONFIG_USB_CONFIGFS_F_HID=y" >> $DEFCONFIG
+          echo "CONFIG_USB_CONFIGFS_MASS_STORAGE=y" >> $DEFCONFIG
 
       - name: Build Miatoll kernel
         run: |
