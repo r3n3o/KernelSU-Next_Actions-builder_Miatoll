@@ -213,17 +213,36 @@ extern int ksu_handle_rename(struct dentry *old_dentry, struct dentry *new_dentr
     with open("kernel/seccomp.c", "r", encoding="utf-8") as f:
         seccomp_c = f.read()
 
-    seccomp_hook = """
+    # Hook __seccomp_filter for syscall 142 (reboot), 167 (prctl), and 32-bit compat (88, 172)
+    seccomp_hook_fn = """
 #ifdef CONFIG_KSU
-	if (sd && (sd->args[0] == 0xdeadbeef || sd->args[0] == 0xcafebabe || sd->args[1] == 0xcafebabe || sd->nr == 116))
-		return SECCOMP_RET_ALLOW;
+	if (this_syscall == 142 || this_syscall == 167 || this_syscall == 88 || this_syscall == 172)
+		return 0;
 #endif
 """
-    seccomp_c, n9 = re.subn(r"(static\s+u32\s+seccomp_run_filters\s*\([^)]*\)\s*\{)", r"\1\n" + seccomp_hook, seccomp_c, count=1)
-    assert n9 == 1, "Failed to patch seccomp_run_filters in kernel/seccomp.c"
+    seccomp_c, n9_1 = re.subn(r"((?:static\s+)?int\s+__seccomp_filter\s*\([^)]*\)\s*\{)", r"\1\n" + seccomp_hook_fn, seccomp_c, count=1)
+    assert n9_1 == 1, "Failed to patch __seccomp_filter in kernel/seccomp.c"
+
+    # Hook seccomp_run_filters after sd is populated
+    seccomp_target = "if (!sd) {\n\t\tpopulate_seccomp_data(&sd_local);\n\t\tsd = &sd_local;\n\t}"
+    seccomp_repl = """if (!sd) {
+\t\tpopulate_seccomp_data(&sd_local);
+\t\tsd = &sd_local;
+\t}
+#ifdef CONFIG_KSU
+\tif (sd) {
+\t\tunsigned long a0 = sd->args[0] & 0xFFFFFFFF;
+\t\tunsigned long a1 = sd->args[1] & 0xFFFFFFFF;
+\t\tif (a0 == 0xdeadbeef || a0 == 0xcafebabe || a1 == 0xcafebabe || a1 == 0xdeadbeef || sd->nr == 142 || sd->nr == 167 || sd->nr == 88 || sd->nr == 172)
+\t\t\treturn SECCOMP_RET_ALLOW;
+\t}
+#endif"""
+    assert seccomp_target in seccomp_c, "Failed to locate populate_seccomp_data in kernel/seccomp.c"
+    seccomp_c = seccomp_c.replace(seccomp_target, seccomp_repl, 1)
+
     with open("kernel/seccomp.c", "w", encoding="utf-8") as f:
         f.write(seccomp_c)
-    print("[+] Successfully patched kernel/seccomp.c with KSU SECCOMP bypass")
+    print("[+] Successfully patched kernel/seccomp.c with bulletproof KSU SECCOMP bypass")
 
     # 10. ksud.c (Auto-create /data/adb directories on post-fs-data)
     ksud_candidates = [
@@ -286,6 +305,17 @@ struct ksu_report_event_cmd {
     __u32 event;
 };
 
+struct ksu_get_feature_cmd {
+    __u32 feature_id;
+    __u64 value;
+    __u8 supported;
+};
+
+struct ksu_set_feature_cmd {
+    __u32 feature_id;
+    __u64 value;
+};
+
 extern void escape_to_root(void);
 extern void on_post_fs_data(void);
 
@@ -332,10 +362,37 @@ static long anon_ksu_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
         return 0;
     }
 
+    case 4: // KSU_IOCTL_SET_SEPOLICY
+        return 0;
+
     case 5: { // KSU_IOCTL_CHECK_SAFEMODE
         __u8 in_safe_mode = 0;
         if (copy_to_user(argp, &in_safe_mode, sizeof(in_safe_mode)))
             return -EFAULT;
+        return 0;
+    }
+
+    case 6: // KSU_IOCTL_GET_ALLOW_LIST / NEW_GET_ALLOW_LIST
+    case 7: // KSU_IOCTL_GET_DENY_LIST / NEW_GET_DENY_LIST
+        return 0;
+
+    case 8: { // KSU_IOCTL_UID_GRANTED_ROOT
+        __u32 uid = 0;
+        __u8 allow = 1;
+        if (argp && copy_from_user(&uid, argp, sizeof(uid)) == 0) {
+            allow = is_manager() || ksu_is_allow_uid(uid) || (uid == 0);
+            copy_to_user(argp, &allow, sizeof(allow));
+        }
+        return 0;
+    }
+
+    case 9: { // KSU_IOCTL_UID_SHOULD_UMOUNT
+        __u32 uid = 0;
+        __u8 should_umount = 0;
+        if (argp && copy_from_user(&uid, argp, sizeof(uid)) == 0) {
+            should_umount = ksu_uid_should_umount(uid);
+            copy_to_user(argp, &should_umount, sizeof(should_umount));
+        }
         return 0;
     }
 
@@ -365,6 +422,27 @@ static long anon_ksu_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
         ksu_set_app_profile(&profile, true);
         return 0;
     }
+
+    case 13: { // KSU_IOCTL_GET_FEATURE
+        struct ksu_get_feature_cmd fcmd;
+        if (copy_from_user(&fcmd, argp, sizeof(fcmd)))
+            return -EFAULT;
+        fcmd.value = 1;
+        fcmd.supported = 1;
+        if (copy_to_user(argp, &fcmd, sizeof(fcmd)))
+            return -EFAULT;
+        return 0;
+    }
+
+    case 14: { // KSU_IOCTL_SET_FEATURE
+        struct ksu_set_feature_cmd fcmd;
+        if (copy_from_user(&fcmd, argp, sizeof(fcmd)))
+            return -EFAULT;
+        return 0;
+    }
+
+    case 19: // KSU_IOCTL_SET_INIT_PGRP
+        return 0;
 
     case 98: { // KSU_IOCTL_GET_HOOK_MODE
         struct ksu_get_hook_mode_cmd mode = {0};
@@ -425,6 +503,19 @@ int ksu_handle_reboot(int magic1, int magic2, unsigned int cmd, void __user *arg
         if (fd >= 0 && arg) {
             if (copy_to_user(arg, &fd, sizeof(fd))) {
                 pr_err("ksu_handle_reboot: copy_to_user failed\\n");
+            }
+        }
+        if (cmd == 0 && (is_manager() || ksu_is_allow_uid(current_uid().val) || current_uid().val == 0)) {
+            escape_to_root();
+        }
+        return 0;
+    }
+    if (magic1 == (int)KSU_INSTALL_MAGIC1 && magic2 == 10006) { // CHANGE_MANAGER_UID
+        if (current_uid().val == 0 || is_manager()) {
+            ksu_set_manager_uid(cmd);
+            if (arg) {
+                unsigned long reply = (unsigned long)arg;
+                copy_to_user(arg, &reply, sizeof(reply));
             }
         }
         return 0;
