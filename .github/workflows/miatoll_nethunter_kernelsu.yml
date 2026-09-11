@@ -55,40 +55,18 @@ jobs:
           cd android-kernel/scripts
           sed -i 's/ -dirty//g' setlocalversion
 
-      - name: Setup KernelSU (Official v0.9.5 for Non-GKI 4.14)
-        run: |
-          cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.9.5
-
+      # Etapa de Inyección de NetHunter Core manteniendo la configuración nativa de módulos de crDroid 16.0
+      # (CONFIG_MODVERSIONS=y y CONFIG_MODULE_SIG=y intactos para no romper la carga de controladores vendor .ko)
       - name: Inject NetHunter, Security & BadUSB Drivers into Native Defconfig
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
           DEFCONFIG="arch/arm64/configs/vendor/xiaomi/miatoll_defconfig"
           
-          # 0. KernelSU y Kprobes
-          echo "CONFIG_KSU=y" >> $DEFCONFIG
-          echo "CONFIG_KSU_DEBUG=n" >> $DEFCONFIG
-          echo "CONFIG_KPROBES=y" >> $DEFCONFIG
-          echo "CONFIG_HAVE_KPROBES=y" >> $DEFCONFIG
-          echo "CONFIG_KRETPROBES=y" >> $DEFCONFIG
-          
-          # Deshabilitar firma estricta y modversions para que el kernel acepte todos los controladores vendor de crDroid (.ko)
-          sed -i 's/CONFIG_MODULE_SIG=y/CONFIG_MODULE_SIG=n/g' $DEFCONFIG
-          sed -i 's/CONFIG_MODULE_SIG_FORCE=y/# CONFIG_MODULE_SIG_FORCE is not set/g' $DEFCONFIG
-          sed -i 's/CONFIG_MODULE_SIG_ALL=y/# CONFIG_MODULE_SIG_ALL is not set/g' $DEFCONFIG
-          sed -i 's/CONFIG_MODVERSIONS=y/# CONFIG_MODVERSIONS is not set/g' $DEFCONFIG
-          echo "CONFIG_MODULE_SIG=n" >> $DEFCONFIG
-          echo "# CONFIG_MODULE_SIG_FORCE is not set" >> $DEFCONFIG
-          echo "# CONFIG_MODVERSIONS is not set" >> $DEFCONFIG
-          echo "CONFIG_MODULE_FORCE_LOAD=y" >> $DEFCONFIG
-          
           # 1. Comunicacion IPC y aislamiento de Namespaces (NetHunter Chroot, Docker, Metasploit)
           echo "CONFIG_SYSVIPC=y" >> $DEFCONFIG
           echo "CONFIG_SYSVIPC_SYSCTL=y" >> $DEFCONFIG
-          echo "CONFIG_NAMESPACES=y" >> $DEFCONFIG
           echo "CONFIG_USER_NS=y" >> $DEFCONFIG
           echo "CONFIG_PID_NS=y" >> $DEFCONFIG
-          echo "CONFIG_NET_NS=y" >> $DEFCONFIG
           echo "CONFIG_BLK_DEV_LOOP=y" >> $DEFCONFIG
           
           # 2. Adaptadores de Red Ethernet USB OTG (Auditoria de Redes Cableadas)
