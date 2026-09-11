@@ -60,17 +60,10 @@ jobs:
           cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.9.5
 
-      - name: Inject NetHunter, Wireless & Security Drivers into Native Defconfig
+      - name: Inject NetHunter, Security & BadUSB Drivers into Native Defconfig
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
           DEFCONFIG="arch/arm64/configs/vendor/xiaomi/miatoll_defconfig"
-          
-          # Patch ath9k_htc symbol conflicts with Qualcomm qca-wifi-host-cmn (htc_start, htc_stop, htc_connect_service)
-          HTC_HEADER="drivers/net/wireless/ath/ath9k/htc_hst.h"
-          if [ -f "$HTC_HEADER" ]; then
-            echo "[+] Patching ath9k_htc symbols to prevent Qualcomm linker collisions..."
-            sed -i '1s/^/#define htc_init ath9k_htc_init_internal\n#define htc_connect_service ath9k_htc_connect_service_internal\n#define htc_send ath9k_htc_send_internal\n#define htc_send_epid ath9k_htc_send_epid_internal\n#define htc_stop ath9k_htc_stop_internal\n#define htc_start ath9k_htc_start_internal\n#define htc_sta_drain ath9k_htc_sta_drain_internal\n/' $HTC_HEADER
-          fi
           
           # 0. KernelSU y Kprobes
           echo "CONFIG_KSU=y" >> $DEFCONFIG
@@ -98,58 +91,7 @@ jobs:
           echo "CONFIG_NET_NS=y" >> $DEFCONFIG
           echo "CONFIG_BLK_DEV_LOOP=y" >> $DEFCONFIG
           
-          # 2. Pila inalambrica, Rate Control Minstrel e Inyeccion de paquetes
-          echo "CONFIG_WIRELESS=y" >> $DEFCONFIG
-          echo "CONFIG_CFG80211=y" >> $DEFCONFIG
-          echo "CONFIG_MAC80211=y" >> $DEFCONFIG
-          echo "CONFIG_CFG80211_WEXT=y" >> $DEFCONFIG
-          echo "CONFIG_MAC80211_RC_MINSTREL=y" >> $DEFCONFIG
-          echo "CONFIG_MAC80211_RC_MINSTREL_HT=y" >> $DEFCONFIG
-          echo "CONFIG_MAC80211_RC_DEFAULT_MINSTREL=y" >> $DEFCONFIG
-          echo "CONFIG_MAC80211_RC_DEFAULT=\"minstrel_ht\"" >> $DEFCONFIG
-          echo "CONFIG_MAC80211_LEDS=y" >> $DEFCONFIG
-          echo "CONFIG_MAC80211_MESH=y" >> $DEFCONFIG
-          
-          # 3. Subsistema Criptografico para WiFi y Drivers
-          echo "CONFIG_CRYPTO_ARC4=y" >> $DEFCONFIG
-          echo "CONFIG_CRYPTO_AES=y" >> $DEFCONFIG
-          echo "CONFIG_CRYPTO_CCM=y" >> $DEFCONFIG
-          echo "CONFIG_CRYPTO_GCM=y" >> $DEFCONFIG
-          echo "CONFIG_CRYPTO_CMAC=y" >> $DEFCONFIG
-          echo "CONFIG_CRYPTO_MICHAEL_MIC=y" >> $DEFCONFIG
-          echo "CONFIG_EEPROM_93CX6=y" >> $DEFCONFIG
-          echo "CONFIG_CRC_CCITT=y" >> $DEFCONFIG
-          echo "CONFIG_CRC_ITU_T=y" >> $DEFCONFIG
-          
-          # 4. Controladores Wi-Fi USB OTG (Atheros, Realtek, Ralink, MediaTek)
-          echo "CONFIG_WLAN_VENDOR_ATH=y" >> $DEFCONFIG
-          echo "CONFIG_ATH9K_HTC=y" >> $DEFCONFIG
-          echo "CONFIG_CARL9170=y" >> $DEFCONFIG
-          echo "CONFIG_CARL9170_LEDS=y" >> $DEFCONFIG
-          echo "CONFIG_CARL9170_WPC=y" >> $DEFCONFIG
-          
-          echo "CONFIG_WLAN_VENDOR_REALTEK=y" >> $DEFCONFIG
-          echo "CONFIG_RTL8187=y" >> $DEFCONFIG
-          echo "CONFIG_RTL8187_LEDS=y" >> $DEFCONFIG
-          echo "CONFIG_RTL8XXXU=y" >> $DEFCONFIG
-          echo "CONFIG_RTL8XXXU_UNTESTED=y" >> $DEFCONFIG
-          
-          echo "CONFIG_WLAN_VENDOR_RALINK=y" >> $DEFCONFIG
-          echo "CONFIG_RT2X00=y" >> $DEFCONFIG
-          echo "CONFIG_RT2800USB=y" >> $DEFCONFIG
-          echo "CONFIG_RT2800USB_RT33XX=y" >> $DEFCONFIG
-          echo "CONFIG_RT2800USB_RT35XX=y" >> $DEFCONFIG
-          echo "CONFIG_RT2800USB_RT3573=y" >> $DEFCONFIG
-          echo "CONFIG_RT2800USB_RT53XX=y" >> $DEFCONFIG
-          echo "CONFIG_RT2800USB_RT55XX=y" >> $DEFCONFIG
-          echo "CONFIG_RT2800USB_UNKNOWN=y" >> $DEFCONFIG
-          echo "CONFIG_RT2500USB=y" >> $DEFCONFIG
-          echo "CONFIG_RT73USB=y" >> $DEFCONFIG
-          
-          echo "CONFIG_WLAN_VENDOR_MEDIATEK=y" >> $DEFCONFIG
-          echo "CONFIG_MT7601U=y" >> $DEFCONFIG
-          
-          # 5. Adaptadores de Red Ethernet USB OTG (Auditoria de Redes Cableadas)
+          # 2. Adaptadores de Red Ethernet USB OTG (Auditoria de Redes Cableadas)
           echo "CONFIG_USB_NET_DRIVERS=y" >> $DEFCONFIG
           echo "CONFIG_USB_USBNET=y" >> $DEFCONFIG
           echo "CONFIG_USB_NET_AX88179_178A=y" >> $DEFCONFIG
@@ -164,21 +106,20 @@ jobs:
           echo "CONFIG_USB_NET_RNDIS_HOST=y" >> $DEFCONFIG
           echo "CONFIG_USB_NET_CDC_SUBSET=y" >> $DEFCONFIG
           
-          # 6. Bluetooth USB Externo
-          echo "CONFIG_BT=y" >> $DEFCONFIG
+          # 3. Bluetooth USB Externo
           echo "CONFIG_BT_HCIBTUSB=y" >> $DEFCONFIG
           echo "CONFIG_BT_HCIBTUSB_BCM=y" >> $DEFCONFIG
           echo "CONFIG_BT_HCIBTUSB_RTL=y" >> $DEFCONFIG
           echo "CONFIG_BT_HCIUSB=y" >> $DEFCONFIG
           
-          # 7. Radiofrecuencia y Software Defined Radio (RTL-SDR)
+          # 4. Radiofrecuencia y Software Defined Radio (RTL-SDR)
           echo "CONFIG_MEDIA_SUPPORT=y" >> $DEFCONFIG
           echo "CONFIG_MEDIA_USB_SUPPORT=y" >> $DEFCONFIG
           echo "CONFIG_MEDIA_DIGITAL_TV_SUPPORT=y" >> $DEFCONFIG
           echo "CONFIG_DVB_USB_V2=y" >> $DEFCONFIG
           echo "CONFIG_DVB_USB_RTL28XXU=y" >> $DEFCONFIG
           
-          # 8. Emulacion USB HID y Mass Storage (BadUSB y DriveDroid)
+          # 5. Emulacion USB HID y Mass Storage (BadUSB y DriveDroid)
           echo "CONFIG_USB_F_HID=y" >> $DEFCONFIG
           echo "CONFIG_USB_CONFIGFS_F_HID=y" >> $DEFCONFIG
           echo "CONFIG_USB_CONFIGFS_MASS_STORAGE=y" >> $DEFCONFIG
