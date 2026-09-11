@@ -79,9 +79,6 @@ jobs:
           echo "CONFIG_HAVE_KPROBES=y" >> $DEFCONFIG
           echo "CONFIG_KRETPROBES=y" >> $DEFCONFIG
           
-          # Compresion GZIP estandar para ABL bootloader de Xiaomi Miatoll SM7125
-          echo "CONFIG_BUILD_ARM64_KERNEL_COMPRESSION_GZIP=y" >> $DEFCONFIG
-          
           # 1. Comunicacion IPC y aislamiento de Namespaces (NetHunter Chroot, Docker, Metasploit)
           echo "CONFIG_SYSVIPC=y" >> $DEFCONFIG
           echo "CONFIG_SYSVIPC_SYSCTL=y" >> $DEFCONFIG
@@ -214,15 +211,15 @@ jobs:
           cd $GITHUB_WORKSPACE/kernel_workspace
           BOOT_DIR="android-kernel/out/arch/arm64/boot"
           
-          # Priorizar Image.gz (formato estándar y requerido por AnyKernel3 en Xiaomi Miatoll SM7125)
-          if [ -f "$BOOT_DIR/Image.gz" ]; then
-            echo "KERNEL_FILE_NAME=Image.gz" >> $GITHUB_ENV
-            echo "CHECK_IMAGE=true" >> $GITHUB_ENV
-            echo "✅ ¡Kernel Image.gz detectado con éxito!"
-          elif [ -f "$BOOT_DIR/Image" ]; then
+          # crDroid 16.0 usa el binario raw Image (BOARD_KERNEL_IMAGE_NAME := Image)
+          if [ -f "$BOOT_DIR/Image" ]; then
             echo "KERNEL_FILE_NAME=Image" >> $GITHUB_ENV
             echo "CHECK_IMAGE=true" >> $GITHUB_ENV
-            echo "✅ ¡Kernel Image raw detectado!"
+            echo "✅ ¡Kernel raw Image detectado (crDroid 16.0 estándar)!"
+          elif [ -f "$BOOT_DIR/Image.gz" ]; then
+            echo "KERNEL_FILE_NAME=Image.gz" >> $GITHUB_ENV
+            echo "CHECK_IMAGE=true" >> $GITHUB_ENV
+            echo "✅ ¡Kernel Image.gz detectado!"
           else
             echo "🚨 ERROR: No se encontró ningún binario Image válido en $BOOT_DIR"
             exit 1
@@ -297,8 +294,8 @@ jobs:
           name: AK3-Miatoll-NetHunter-KSU
           path: kernel_workspace/Miatoll-NetHunter-Kernel.zip
 
-      - name: Upload Standalone Image.gz (Direct Flash)
+      - name: Upload Standalone Raw Image (Direct Flash)
         uses: actions/upload-artifact@v4
         with:
-          name: Miatoll-Kernel-Image-GZ
-          path: kernel_workspace/android-kernel/out/arch/arm64/boot/Image.gz
+          name: Miatoll-Kernel-Image-Raw
+          path: kernel_workspace/android-kernel/out/arch/arm64/boot/Image
