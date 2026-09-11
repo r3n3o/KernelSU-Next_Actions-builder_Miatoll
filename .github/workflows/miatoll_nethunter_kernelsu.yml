@@ -55,12 +55,126 @@ jobs:
           cd android-kernel/scripts
           sed -i 's/ -dirty//g' setlocalversion
 
+      - name: Setup KernelSU (Official v0.9.5 Non-GKI)
+        run: |
+          cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.9.5
+
+      - name: Apply KernelSU Manual VFS Hooks (No Kprobes)
+        run: |
+          cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+          python3 -c '
+          import re
+
+          # 1. fs/exec.c
+          with open("fs/exec.c", "r") as f:
+              exec_c = f.read()
+
+          exec_decl = """
+          #ifdef CONFIG_KSU
+          extern bool ksu_execveat_hook __read_mostly;
+          extern int ksu_handle_execveat(int *fd, struct filename **filename_ptr, void *argv,
+          			void *envp, int *flags);
+          extern int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr,
+          				 void *argv, void *envp, int *flags);
+          #endif
+          """
+          exec_call = """
+          #ifdef CONFIG_KSU
+          	if (unlikely(ksu_execveat_hook))
+          		ksu_handle_execveat(&fd, &filename, &argv, &envp, &flags);
+          	else
+          		ksu_handle_execveat_sucompat(&fd, &filename, &argv, &envp, &flags);
+          #endif
+          """
+          exec_c = exec_decl + "\n" + exec_c
+          exec_c, n1 = re.subn(r"(do_execveat_common\s*\([^)]*\)\s*\{)", r"\1\n" + exec_call, exec_c, count=1)
+          assert n1 == 1, "Failed to patch do_execveat_common in fs/exec.c"
+          with open("fs/exec.c", "w") as f:
+              f.write(exec_c)
+          print("[+] Successfully patched fs/exec.c with KernelSU execveat hook")
+
+          # 2. fs/open.c
+          with open("fs/open.c", "r") as f:
+              open_c = f.read()
+
+          open_decl = """
+          #ifdef CONFIG_KSU
+          extern int ksu_handle_faccessat(int *dfd, const char __user **filename_user, int *mode,
+          			 int *flags);
+          #endif
+          """
+          open_call = """
+          #ifdef CONFIG_KSU
+          	ksu_handle_faccessat(&dfd, &filename, &mode, NULL);
+          #endif
+          """
+          open_c = open_decl + "\n" + open_c
+          open_c, n2 = re.subn(r"(SYSCALL_DEFINE3\s*\(\s*faccessat\s*,[^{]*\{)", r"\1\n" + open_call, open_c, count=1)
+          assert n2 == 1, "Failed to patch SYSCALL_DEFINE3(faccessat) in fs/open.c"
+          with open("fs/open.c", "w") as f:
+              f.write(open_c)
+          print("[+] Successfully patched fs/open.c with KernelSU faccessat hook")
+
+          # 3. fs/read_write.c
+          with open("fs/read_write.c", "r") as f:
+              rw_c = f.read()
+
+          rw_decl = """
+          #ifdef CONFIG_KSU
+          extern bool ksu_vfs_read_hook __read_mostly;
+          extern int ksu_handle_vfs_read(struct file **file_ptr, char __user **buf_ptr,
+          			size_t *count_ptr, loff_t **pos);
+          #endif
+          """
+          rw_call = """
+          #ifdef CONFIG_KSU
+          	if (unlikely(ksu_vfs_read_hook))
+          		ksu_handle_vfs_read(&file, &buf, &count, &pos);
+          #endif
+          """
+          rw_c = rw_decl + "\n" + rw_c
+          rw_c, n3 = re.subn(r"(ssize_t\s+vfs_read\s*\([^)]*\)\s*\{)", r"\1\n" + rw_call, rw_c, count=1)
+          assert n3 == 1, "Failed to patch vfs_read in fs/read_write.c"
+          with open("fs/read_write.c", "w") as f:
+              f.write(rw_c)
+          print("[+] Successfully patched fs/read_write.c with KernelSU vfs_read hook")
+
+          # 4. fs/stat.c
+          with open("fs/stat.c", "r") as f:
+              stat_c = f.read()
+
+          stat_decl = """
+          #ifdef CONFIG_KSU
+          extern int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags);
+          #endif
+          """
+          stat_call = """
+          #ifdef CONFIG_KSU
+          	ksu_handle_stat(&dfd, &filename, &flags);
+          #endif
+          """
+          stat_c = stat_decl + "\n" + stat_c
+          stat_c, n4 = re.subn(r"(int\s+vfs_statx\s*\([^)]*\)\s*\{)", r"\1\n" + stat_call, stat_c, count=1)
+          assert n4 == 1, "Failed to patch vfs_statx in fs/stat.c"
+          with open("fs/stat.c", "w") as f:
+              f.write(stat_c)
+          print("[+] Successfully patched fs/stat.c with KernelSU stat hook")
+          '
+          echo "=== VERIFICACIÓN DE PARCHES VFS KERNELSU ==="
+          git diff fs/
+          echo "==========================================="
+
       # Etapa de Inyección de NetHunter Core manteniendo la configuración nativa de módulos de crDroid 16.0
       # (CONFIG_MODVERSIONS=y y CONFIG_MODULE_SIG=y intactos para no romper la carga de controladores vendor .ko)
       - name: Inject NetHunter, Security & BadUSB Drivers into Native Defconfig
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
           DEFCONFIG="arch/arm64/configs/vendor/xiaomi/miatoll_defconfig"
+          
+          # 0. KernelSU (Hooks VFS manuales sin Kprobes)
+          echo "CONFIG_KSU=y" >> $DEFCONFIG
+          echo "CONFIG_KSU_DEBUG=n" >> $DEFCONFIG
           
           # 1. Comunicacion IPC y aislamiento de Namespaces (NetHunter Chroot, Docker, Metasploit)
           echo "CONFIG_SYSVIPC=y" >> $DEFCONFIG
