@@ -79,6 +79,14 @@ jobs:
           echo "CONFIG_HAVE_KPROBES=y" >> $DEFCONFIG
           echo "CONFIG_KRETPROBES=y" >> $DEFCONFIG
           
+          # Deshabilitar firma estricta de modulos para que el kernel acepte todos los controladores vendor de crDroid (.ko)
+          sed -i 's/CONFIG_MODULE_SIG=y/CONFIG_MODULE_SIG=n/g' $DEFCONFIG
+          sed -i 's/CONFIG_MODULE_SIG_FORCE=y/# CONFIG_MODULE_SIG_FORCE is not set/g' $DEFCONFIG
+          sed -i 's/CONFIG_MODULE_SIG_ALL=y/# CONFIG_MODULE_SIG_ALL is not set/g' $DEFCONFIG
+          echo "CONFIG_MODULE_SIG=n" >> $DEFCONFIG
+          echo "# CONFIG_MODULE_SIG_FORCE is not set" >> $DEFCONFIG
+          echo "CONFIG_MODULE_FORCE_LOAD=y" >> $DEFCONFIG
+          
           # 1. Comunicacion IPC y aislamiento de Namespaces (NetHunter Chroot, Docker, Metasploit)
           echo "CONFIG_SYSVIPC=y" >> $DEFCONFIG
           echo "CONFIG_SYSVIPC_SYSCTL=y" >> $DEFCONFIG
