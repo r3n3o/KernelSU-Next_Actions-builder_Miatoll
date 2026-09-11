@@ -32,7 +32,7 @@ extern int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr,
         f.write(exec_c)
     print("[+] Successfully patched fs/exec.c with KernelSU execveat hook")
 
-    # 2. fs/open.c (faccessat hook)
+    # 2. fs/open.c (faccessat hook - placed after local variable declarations)
     with open("fs/open.c", "r", encoding="utf-8") as f:
         open_c = f.read()
 
@@ -47,13 +47,15 @@ extern int ksu_handle_faccessat(int *dfd, const char __user **filename_user, int
 	ksu_handle_faccessat(&dfd, &filename, &mode, NULL);
 #endif
 """
-    open_c, n2 = re.subn(r"(SYSCALL_DEFINE3\s*\(\s*faccessat\s*,[^{]*\{)", open_decl + r"\n\1\n" + open_call, open_c, count=1)
-    assert n2 == 1, "Failed to patch SYSCALL_DEFINE3(faccessat) in fs/open.c"
+    open_c, n2a = re.subn(r"(SYSCALL_DEFINE3\s*\(\s*faccessat\s*,[^{]*\{)", open_decl + r"\n\1", open_c, count=1)
+    assert n2a == 1, "Failed to inject declaration in fs/open.c"
+    open_c, n2b = re.subn(r"(unsigned\s+int\s+lookup_flags\s*=\s*LOOKUP_FOLLOW\s*;)", r"\1\n" + open_call, open_c, count=1)
+    assert n2b == 1, "Failed to inject hook call in fs/open.c"
     with open("fs/open.c", "w", encoding="utf-8") as f:
         f.write(open_c)
     print("[+] Successfully patched fs/open.c with KernelSU faccessat hook")
 
-    # 3. fs/read_write.c (vfs_read hook)
+    # 3. fs/read_write.c (vfs_read hook - placed after local variable declarations)
     with open("fs/read_write.c", "r", encoding="utf-8") as f:
         rw_c = f.read()
 
@@ -70,13 +72,16 @@ extern int ksu_handle_vfs_read(struct file **file_ptr, char __user **buf_ptr,
 		ksu_handle_vfs_read(&file, &buf, &count, &pos);
 #endif
 """
-    rw_c, n3 = re.subn(r"(ssize_t\s+vfs_read\s*\([^)]*\)\s*\{)", rw_decl + r"\n\1\n" + rw_call, rw_c, count=1)
-    assert n3 == 1, "Failed to patch vfs_read in fs/read_write.c"
+    rw_c, n3a = re.subn(r"(ssize_t\s+vfs_read\s*\([^)]*\)\s*\{)", rw_decl + r"\n\1", rw_c, count=1)
+    assert n3a == 1, "Failed to inject declaration in fs/read_write.c"
+    target_rw = "ssize_t vfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)\n{\n\tssize_t ret;"
+    assert target_rw in rw_c, "Failed to locate ssize_t ret in fs/read_write.c"
+    rw_c = rw_c.replace(target_rw, target_rw + "\n" + rw_call, 1)
     with open("fs/read_write.c", "w", encoding="utf-8") as f:
         f.write(rw_c)
     print("[+] Successfully patched fs/read_write.c with KernelSU vfs_read hook")
 
-    # 4. fs/stat.c (vfs_statx hook)
+    # 4. fs/stat.c (vfs_statx hook - placed after local variable declarations)
     with open("fs/stat.c", "r", encoding="utf-8") as f:
         stat_c = f.read()
 
@@ -90,13 +95,16 @@ extern int ksu_handle_stat(int *dfd, const char __user **filename_user, int *fla
 	ksu_handle_stat(&dfd, &filename, &flags);
 #endif
 """
-    stat_c, n4 = re.subn(r"((?:static\s+)?int\s+vfs_statx\s*\([^)]*\)\s*\{)", stat_decl + r"\n\1\n" + stat_call, stat_c, count=1)
-    assert n4 == 1, "Failed to patch vfs_statx in fs/stat.c"
+    stat_c, n4a = re.subn(r"((?:static\s+)?int\s+vfs_statx\s*\([^)]*\)\s*\{)", stat_decl + r"\n\1", stat_c, count=1)
+    assert n4a == 1, "Failed to inject declaration in fs/stat.c"
+    target_stat = "unsigned int lookup_flags = LOOKUP_FOLLOW | LOOKUP_AUTOMOUNT;"
+    assert target_stat in stat_c, "Failed to locate lookup_flags in fs/stat.c"
+    stat_c = stat_c.replace(target_stat, target_stat + "\n" + stat_call, 1)
     with open("fs/stat.c", "w", encoding="utf-8") as f:
         f.write(stat_c)
     print("[+] Successfully patched fs/stat.c with KernelSU stat hook")
 
-    # 5. kernel/sys.c (prctl syscall for Manager communication)
+    # 5. kernel/sys.c (prctl syscall - placed after local variable declarations)
     with open("kernel/sys.c", "r", encoding="utf-8") as f:
         sys_c = f.read()
 
@@ -111,8 +119,11 @@ extern int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
 	ksu_handle_prctl(option, arg2, arg3, arg4, arg5);
 #endif
 """
-    sys_c, n5 = re.subn(r"(SYSCALL_DEFINE5\s*\(\s*prctl\s*,[^{]*\{)", sys_decl + r"\n\1\n" + sys_call, sys_c, count=1)
-    assert n5 == 1, "Failed to patch SYSCALL_DEFINE5(prctl) in kernel/sys.c"
+    sys_c, n5a = re.subn(r"(SYSCALL_DEFINE5\s*\(\s*prctl\s*,[^{]*\{)", sys_decl + r"\n\1", sys_c, count=1)
+    assert n5a == 1, "Failed to inject declaration in kernel/sys.c"
+    target_sys = "unsigned char comm[sizeof(me->comm)];\n\tlong error;"
+    assert target_sys in sys_c, "Failed to locate local variables in kernel/sys.c"
+    sys_c = sys_c.replace(target_sys, target_sys + "\n" + sys_call, 1)
     with open("kernel/sys.c", "w", encoding="utf-8") as f:
         f.write(sys_c)
     print("[+] Successfully patched kernel/sys.c with KernelSU prctl hook")
@@ -168,8 +179,9 @@ extern int ksu_handle_rename(struct dentry *old_dentry, struct dentry *new_dentr
 		return SECCOMP_RET_ALLOW;
 #endif
 """
-    seccomp_c, n9 = re.subn(r"(static\s+u32\s+seccomp_run_filters\s*\([^)]*\)\s*\{)", r"\1\n" + seccomp_hook, seccomp_c, count=1)
-    assert n9 == 1, "Failed to patch seccomp_run_filters in kernel/seccomp.c"
+    target_seccomp = "struct seccomp_filter *f =\n\t\t\tREAD_ONCE(current->seccomp.filter);"
+    assert target_seccomp in seccomp_c, "Failed to locate target_seccomp in kernel/seccomp.c"
+    seccomp_c = seccomp_c.replace(target_seccomp, target_seccomp + "\n" + seccomp_hook, 1)
     with open("kernel/seccomp.c", "w", encoding="utf-8") as f:
         f.write(seccomp_c)
     print("[+] Successfully patched kernel/seccomp.c with KSU SECCOMP bypass")
@@ -214,6 +226,11 @@ extern int ksu_handle_devpts(struct inode *inode);
 
     ns_patch = """
 #ifdef CONFIG_KSU
+static inline bool path_mounted(const struct path *path)
+{
+	return path->mnt->mnt_root == path->dentry;
+}
+
 static int can_umount(const struct path *path, int flags)
 {
 	struct mount *mnt = real_mount(path->mnt);
@@ -243,6 +260,7 @@ int path_umount(struct path *path, int flags)
 	mntput_no_expire(mnt);
 	return ret;
 }
+EXPORT_SYMBOL(path_umount);
 #endif
 """
     ns_c = ns_c + "\n" + ns_patch
@@ -250,7 +268,7 @@ int path_umount(struct path *path, int flags)
         f.write(ns_c)
     print("[+] Successfully backported path_umount in fs/namespace.c")
 
-    print("[🎉] All 12 KernelSU VFS & Security patches applied successfully!")
+    print("[*] All 12 KernelSU VFS & Security patches applied successfully!")
 
 if __name__ == "__main__":
     main()
