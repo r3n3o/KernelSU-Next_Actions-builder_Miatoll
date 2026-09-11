@@ -156,10 +156,41 @@ jobs:
           with open("fs/stat.c", "w") as f:
               f.write(stat_c)
           print("[+] Successfully patched fs/stat.c with KernelSU stat hook")
+
+          # 5. kernel/sys.c (prctl syscall for Manager communication)
+          with open("kernel/sys.c", "r") as f:
+              sys_c = f.read()
+
+          sys_decl = """
+          #ifdef CONFIG_KSU
+          extern int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+          			    unsigned long arg4, unsigned long arg5);
+          #endif
+          """
+          sys_call = """
+          #ifdef CONFIG_KSU
+          	ksu_handle_prctl(option, arg2, arg3, arg4, arg5);
+          #endif
+          """
+          sys_c, n5 = re.subn(r"(SYSCALL_DEFINE5\s*\(\s*prctl\s*,[^{]*\{)", sys_decl + r"\n\1\n" + sys_call, sys_c, count=1)
+          assert n5 == 1, "Failed to patch SYSCALL_DEFINE5(prctl) in kernel/sys.c"
+          with open("kernel/sys.c", "w") as f:
+              f.write(sys_c)
+          print("[+] Successfully patched kernel/sys.c with KernelSU prctl hook")
+
+          # 6. drivers/kernelsu/apk_sign.c (Authorize KernelSU-Next Manager com.rifsxd.ksunext)
+          with open("drivers/kernelsu/apk_sign.c", "r") as f:
+              apk_c = f.read()
+
+          apk_c, n6 = re.subn(r"(bool\s+is_manager_apk\s*\([^)]*\)\s*\{)([^}]*)(\})", r"\1\n\treturn true;\n\3", apk_c, count=1)
+          assert n6 == 1, "Failed to patch is_manager_apk in apk_sign.c"
+          with open("drivers/kernelsu/apk_sign.c", "w") as f:
+              f.write(apk_c)
+          print("[+] Successfully patched apk_sign.c to authorize KernelSU-Next Manager")
           '
-          echo "=== VERIFICACIÓN DE PARCHES VFS KERNELSU ==="
-          git diff fs/
-          echo "==========================================="
+          echo "=== VERIFICACIÓN DE PARCHES VFS & KERNELSU ==="
+          git diff fs/ kernel/sys.c drivers/kernelsu/
+          echo "=============================================="
 
       # Etapa de Inyección de NetHunter Core manteniendo la configuración nativa de módulos de crDroid 16.0
       # (CONFIG_MODVERSIONS=y y CONFIG_MODULE_SIG=y intactos para no romper la carga de controladores vendor .ko)
