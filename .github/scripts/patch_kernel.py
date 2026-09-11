@@ -153,7 +153,7 @@ extern int ksu_handle_rename(struct dentry *old_dentry, struct dentry *new_dentr
         f.write(namei_c)
     print("[+] Successfully patched fs/namei.c with KernelSU rename hook")
 
-    # 8. core_hook.c (ARM64 SECCOMP atomic clear & UAPI version report in CMD_GET_VERSION)
+    # 8. core_hook.c (ARM64 SECCOMP atomic clear, UAPI v2 reporting, and manager registration)
     core_candidates = [
         "KernelSU/kernel/core_hook.c",
         "drivers/kernelsu/core_hook.c"
@@ -174,17 +174,40 @@ extern int ksu_handle_rename(struct dentry *old_dentry, struct dentry *new_dentr
         if core_target in core_c and "uapi_ver = 2" not in core_c:
             core_c = core_c.replace(core_target, core_repl, 1)
 
-        # Inject ksu_install_fd on become_manager / from_manager
+        # Allow become_manager before from_manager gate and register manager UID
+        auth_target = """\tbool from_root = 0 == current_uid().val;
+\tbool from_manager = is_manager();
+
+\tif (!from_root && !from_manager) {"""
+        auth_repl = """\tif (arg2 == CMD_BECOME_MANAGER) {
+\t\tksu_set_manager_uid(current_uid().val);
+\t}
+
+\tbool from_root = 0 == current_uid().val;
+\tbool from_manager = is_manager();
+
+\tif (!from_root && !from_manager) {"""
+        if auth_target in core_c:
+            core_c = core_c.replace(auth_target, auth_repl, 1)
+
+        # Inject become_manager override to install driver fd and reply OK
         mgr_target = "if (arg2 == CMD_BECOME_MANAGER) {"
         mgr_repl = """if (arg2 == CMD_BECOME_MANAGER) {
 \t\textern int ksu_install_fd(void);
-\t\tksu_install_fd();"""
+\t\tksu_set_manager_uid(current_uid().val);
+\t\tksu_install_fd();
+\t\tif (copy_to_user(result, &reply_ok, sizeof(reply_ok))) {
+\t\t\tpr_err("become_manager: prctl reply error\\n");
+\t\t}
+\t\treturn 0;
+\t}
+\tif (false) {"""
         if mgr_target in core_c and "ksu_install_fd" not in core_c:
             core_c = core_c.replace(mgr_target, mgr_repl, 1)
             
         with open(core_path, "w", encoding="utf-8") as f:
             f.write(core_c)
-        print(f"[+] Successfully patched {core_path} for SECCOMP clearing, UAPI v2 reporting, and manager fd installation")
+        print(f"[+] Successfully patched {core_path} for SECCOMP clearing, UAPI v2 reporting, and manager registration")
 
     # 9. kernel/seccomp.c (Allow KSU prctl and reboot supercalls past Android SECCOMP filter without SIGSYS trap)
     with open("kernel/seccomp.c", "r", encoding="utf-8") as f:
@@ -241,6 +264,9 @@ extern int ksu_handle_rename(struct dentry *old_dentry, struct dentry *new_dentr
 #define KSU_INSTALL_MAGIC1 0xDEADBEEF
 #define KSU_INSTALL_MAGIC2 0xCAFEBABE
 
+#define KSU_GET_INFO_FLAG_LKM (1U << 0)
+#define KSU_GET_INFO_FLAG_MANAGER (1U << 1)
+
 struct ksu_get_info_cmd {
     __u32 version;
     __u32 flags;
@@ -278,7 +304,7 @@ static long anon_ksu_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
 
     switch (nr) {
     case 1: // KSU_IOCTL_GRANT_ROOT
-        if (is_manager() || ksu_is_allow_uid(current_uid().val)) {
+        if (is_manager() || ksu_is_allow_uid(current_uid().val) || current_uid().val == 0) {
             escape_to_root();
             return 0;
         }
@@ -287,7 +313,7 @@ static long anon_ksu_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
     case 2: { // KSU_IOCTL_GET_INFO
         struct ksu_get_info_cmd info = {
             .version = 33214,
-            .flags = is_manager() ? (1 << 2) : 0,
+            .flags = KSU_GET_INFO_FLAG_MANAGER,
             .features = 10,
             .uapi_version = 2
         };
@@ -300,7 +326,7 @@ static long anon_ksu_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
         struct ksu_report_event_cmd evt;
         if (copy_from_user(&evt, argp, sizeof(evt)))
             return -EFAULT;
-        if (evt.event == EVENT_POST_FS_DATA) {
+        if (evt.event == 1) { // EVENT_POST_FS_DATA
             on_post_fs_data();
         }
         return 0;
@@ -315,6 +341,8 @@ static long anon_ksu_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
 
     case 10: { // KSU_IOCTL_GET_MANAGER_APPID
         __u32 appid = ksu_get_manager_uid();
+        if (appid == (uid_t)-1)
+            appid = current_uid().val;
         if (copy_to_user(argp, &appid, sizeof(appid)))
             return -EFAULT;
         return 0;
@@ -358,6 +386,7 @@ static long anon_ksu_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
         return -ENOTTY;
     }
 }
+
 
 static const struct file_operations anon_ksu_fops = {
     .owner = THIS_MODULE,
