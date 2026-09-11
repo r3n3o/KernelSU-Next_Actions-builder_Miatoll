@@ -87,8 +87,7 @@ jobs:
           		ksu_handle_execveat_sucompat(&fd, &filename, &argv, &envp, &flags);
           #endif
           """
-          exec_c = exec_decl + "\n" + exec_c
-          exec_c, n1 = re.subn(r"(do_execveat_common\s*\([^)]*\)\s*\{)", r"\1\n" + exec_call, exec_c, count=1)
+          exec_c, n1 = re.subn(r"((?:static\s+)?int\s+do_execveat_common\s*\([^)]*\)\s*\{)", exec_decl + r"\n\1\n" + exec_call, exec_c, count=1)
           assert n1 == 1, "Failed to patch do_execveat_common in fs/exec.c"
           with open("fs/exec.c", "w") as f:
               f.write(exec_c)
@@ -109,8 +108,7 @@ jobs:
           	ksu_handle_faccessat(&dfd, &filename, &mode, NULL);
           #endif
           """
-          open_c = open_decl + "\n" + open_c
-          open_c, n2 = re.subn(r"(SYSCALL_DEFINE3\s*\(\s*faccessat\s*,[^{]*\{)", r"\1\n" + open_call, open_c, count=1)
+          open_c, n2 = re.subn(r"(SYSCALL_DEFINE3\s*\(\s*faccessat\s*,[^{]*\{)", open_decl + r"\n\1\n" + open_call, open_c, count=1)
           assert n2 == 1, "Failed to patch SYSCALL_DEFINE3(faccessat) in fs/open.c"
           with open("fs/open.c", "w") as f:
               f.write(open_c)
@@ -133,8 +131,7 @@ jobs:
           		ksu_handle_vfs_read(&file, &buf, &count, &pos);
           #endif
           """
-          rw_c = rw_decl + "\n" + rw_c
-          rw_c, n3 = re.subn(r"(ssize_t\s+vfs_read\s*\([^)]*\)\s*\{)", r"\1\n" + rw_call, rw_c, count=1)
+          rw_c, n3 = re.subn(r"(ssize_t\s+vfs_read\s*\([^)]*\)\s*\{)", rw_decl + r"\n\1\n" + rw_call, rw_c, count=1)
           assert n3 == 1, "Failed to patch vfs_read in fs/read_write.c"
           with open("fs/read_write.c", "w") as f:
               f.write(rw_c)
@@ -154,8 +151,7 @@ jobs:
           	ksu_handle_stat(&dfd, &filename, &flags);
           #endif
           """
-          stat_c = stat_decl + "\n" + stat_c
-          stat_c, n4 = re.subn(r"(int\s+vfs_statx\s*\([^)]*\)\s*\{)", r"\1\n" + stat_call, stat_c, count=1)
+          stat_c, n4 = re.subn(r"((?:static\s+)?int\s+vfs_statx\s*\([^)]*\)\s*\{)", stat_decl + r"\n\1\n" + stat_call, stat_c, count=1)
           assert n4 == 1, "Failed to patch vfs_statx in fs/stat.c"
           with open("fs/stat.c", "w") as f:
               f.write(stat_c)
