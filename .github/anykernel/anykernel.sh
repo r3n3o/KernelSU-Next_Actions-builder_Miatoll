@@ -30,6 +30,8 @@ RAMDISK_COMPRESSION=auto;
 ramdisk_compression=auto;
 PATCH_VBMETA_FLAG=0;
 patch_vbmeta_flag=0;
+NO_VBMETA_PARTITION_PATCH=1;
+no_vbmeta_partition_patch=1;
 
 # import functions/variables and setup patching (DO NOT REMOVE)
 . tools/ak3-core.sh;
