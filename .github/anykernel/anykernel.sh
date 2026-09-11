@@ -36,11 +36,11 @@ no_vbmeta_partition_patch=1;
 # import functions/variables and setup patching (DO NOT REMOVE)
 . tools/ak3-core.sh;
 
-# boot install
-dump_boot;
+# boot install (preserve original crDroid 16.0 ramdisk bit-for-bit without unpack/repack corruption)
+split_boot;
 
-# Eliminate any extracted AVB metadata before repacking to keep clean Android v2 header
+# Eliminate any extracted AVB metadata before repacking
 rm -f $SPLITIMG/avb* $SPLITIMG/*.avb 2>/dev/null;
 
-write_boot;
+flash_boot;
 ## end boot install
