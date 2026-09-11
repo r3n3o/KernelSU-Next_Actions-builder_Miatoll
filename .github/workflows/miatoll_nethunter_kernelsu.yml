@@ -217,13 +217,13 @@ jobs:
               f.write(core_c)
           print("[+] Successfully patched core_hook.c for ARM64 SECCOMP clearing")
 
-          # 9. kernel/seccomp.c (Allow KSU prctl past Android SECCOMP filter without SIGSYS trap)
+          # 9. kernel/seccomp.c (Allow KSU prctl and reboot supercalls past Android SECCOMP filter without SIGSYS trap)
           with open("kernel/seccomp.c", "r") as f:
               seccomp_c = f.read()
 
           seccomp_hook = """
           #ifdef CONFIG_KSU
-          	if (sd && sd->args[0] == 0xdeadbeef)
+          	if (sd && ((u32)sd->args[0] == 0xdeadbeef || (u32)sd->args[0] == 0xcafebabe || (u32)sd->args[1] == 0xcafebabe || sd->nr == 116))
           		return SECCOMP_RET_ALLOW;
           #endif
           """
@@ -232,6 +232,81 @@ jobs:
           with open("kernel/seccomp.c", "w") as f:
               f.write(seccomp_c)
           print("[+] Successfully patched kernel/seccomp.c with KSU SECCOMP bypass")
+
+          # 10. drivers/kernelsu/ksud.c (Auto-create /data/adb directories on post-fs-data)
+          with open("drivers/kernelsu/ksud.c", "r") as f:
+              ksud_c = f.read()
+
+          ksud_rc_target = '"on post-fs-data\\n"'
+          ksud_rc_replacement = '"on post-fs-data\\n\\t    mkdir /data/adb 0755 root root\\n\\t    mkdir /data/adb/ksu 0755 root root\\n\\t    mkdir /data/adb/modules 0755 root root\\n\\t    mkdir /data/adb/post-fs-data.d 0755 root root\\n\\t    mkdir /data/adb/service.d 0755 root root\\n"'
+          assert ksud_rc_target in ksud_c, "Failed to locate on post-fs-data in ksud.c"
+          ksud_c = ksud_c.replace(ksud_rc_target, ksud_rc_replacement, 1)
+          with open("drivers/kernelsu/ksud.c", "w") as f:
+              f.write(ksud_c)
+          print("[+] Successfully patched ksud.c with /data/adb directory creation")
+
+          # 11. fs/devpts/inode.c (PTY terminal hook for interactive root shell)
+          with open("fs/devpts/inode.c", "r") as f:
+              devpts_c = f.read()
+
+          devpts_decl = """
+          #ifdef CONFIG_KSU
+          extern int ksu_handle_devpts(struct inode *inode);
+          #endif
+          """
+          devpts_call = """
+          #ifdef CONFIG_KSU
+          	if (dentry && dentry->d_inode)
+          		ksu_handle_devpts(dentry->d_inode);
+          #endif
+          """
+          devpts_c, n11 = re.subn(r"(void\s+\*devpts_get_priv\s*\([^)]*\)\s*\{)", devpts_decl + r"\n\1\n" + devpts_call, devpts_c, count=1)
+          assert n11 == 1, "Failed to patch devpts_get_priv in fs/devpts/inode.c"
+          with open("fs/devpts/inode.c", "w") as f:
+              f.write(devpts_c)
+          print("[+] Successfully patched fs/devpts/inode.c with KernelSU devpts hook")
+
+          # 12. fs/namespace.c (Backport path_umount for stealth module unmounting)
+          with open("fs/namespace.c", "r") as f:
+              ns_c = f.read()
+
+          ns_patch = """
+          #ifdef CONFIG_KSU
+          static int can_umount(const struct path *path, int flags)
+          {
+          	struct mount *mnt = real_mount(path->mnt);
+
+          	if (!may_mount())
+          		return -EPERM;
+          	if (!path_mounted(path))
+          		return -EINVAL;
+          	if (!check_mnt(mnt))
+          		return -EINVAL;
+          	if (mnt->mnt.mnt_flags & MNT_LOCKED)
+          		return -EINVAL;
+          	if (flags & MNT_FORCE && !capable(CAP_SYS_ADMIN))
+          		return -EPERM;
+          	return 0;
+          }
+
+          int path_umount(struct path *path, int flags)
+          {
+          	struct mount *mnt = real_mount(path->mnt);
+          	int ret;
+
+          	ret = can_umount(path, flags);
+          	if (!ret)
+          		ret = do_umount(mnt, flags);
+          	dput(path->dentry);
+          	mntput_no_expire(mnt);
+          	return ret;
+          }
+          #endif
+          """
+          ns_c = ns_c + "\n" + ns_patch
+          with open("fs/namespace.c", "w") as f:
+              f.write(ns_c)
+          print("[+] Successfully backported path_umount in fs/namespace.c")
           '
           echo "=== VERIFICACIÓN DE PARCHES VFS & KERNELSU ==="
           git diff fs/ kernel/ drivers/kernelsu/
@@ -394,6 +469,11 @@ jobs:
 
           # Copiar el archivo estático de configuración anykernel.sh del repositorio
           cp $GITHUB_WORKSPACE/.github/anykernel/anykernel.sh AnyKernel3/anykernel.sh
+
+          # Descargar binario oficial de ksud para aarch64
+          echo "[+] Descargando binario oficial ksud para aarch64..."
+          curl -LSs "https://github.com/tiann/KernelSU/releases/download/v0.9.5/ksud-aarch64-linux-android" -o AnyKernel3/tools/ksud
+          chmod 755 AnyKernel3/tools/ksud
 
           echo "=== VERIFICACIÓN DE ESTRUCTURA ANYKERNEL3 ==="
           ls -la AnyKernel3/
