@@ -55,18 +55,19 @@ jobs:
           cd android-kernel/scripts
           sed -i 's/ -dirty//g' setlocalversion
 
-      - name: Setup KernelSU-Next (Official Legacy Branch for Non-GKI UAPI v3)
+      - name: Setup KernelSU Core Driver
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-          curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s legacy
+          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.9.5
 
-      - name: Apply KernelSU-Next Manual VFS Hooks (No Kprobes)
+      - name: Apply KernelSU-Next VFS Hooks and Version 33214 Compatibility
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
           python3 $GITHUB_WORKSPACE/.github/scripts/patch_kernel.py
           echo "=== VERIFICACIÓN DE PARCHES VFS & KERNELSU-NEXT ==="
           git diff fs/ kernel/
-          [ -d KernelSU-Next ] && cd KernelSU-Next && git diff && cd .. || true
+          [ -d KernelSU ] && cd KernelSU && git diff && cd .. || true
+          [ -d drivers/kernelsu ] && cd drivers/kernelsu && git diff && cd .. || true
           echo "=================================================="
 
       # Etapa de Inyección de NetHunter Core manteniendo la configuración nativa de módulos de crDroid 16.0
