@@ -96,6 +96,24 @@ extern int ksu_handle_stat(int *dfd, const char __user **filename_user, int *fla
         f.write(stat_c)
     print("[+] Successfully patched fs/stat.c with KernelSU stat hook")
 
+    # 4b. fs/devpts/inode.c (Terminal PTY inode hook for terminal emulators like nhterm & termux)
+    with open("fs/devpts/inode.c", "r", encoding="utf-8") as f:
+        devpts_c = f.read()
+
+    devpts_decl = """
+#ifdef CONFIG_KSU
+extern int ksu_handle_devpts(struct inode *inode);
+#endif
+"""
+    devpts_pattern = r"(struct\s+dentry\s*\*devpts_pty_new\s*\([^{]*\{[\s\S]*?d_add\s*\(\s*dentry\s*,\s*inode\s*\)\s*;)"
+    devpts_repl = devpts_decl + r"\n\1\n#ifdef CONFIG_KSU\n\t\tksu_handle_devpts(inode);\n#endif"
+
+    devpts_c, n_devpts = re.subn(devpts_pattern, devpts_repl, devpts_c, count=1)
+    assert n_devpts == 1, "Failed to patch devpts_pty_new in fs/devpts/inode.c"
+    with open("fs/devpts/inode.c", "w", encoding="utf-8") as f:
+        f.write(devpts_c)
+    print("[+] Successfully patched fs/devpts/inode.c with KernelSU devpts PTY hook")
+
     # 5. kernel/sys.c (prctl syscall for Manager communication)
     with open("kernel/sys.c", "r", encoding="utf-8") as f:
         sys_c = f.read()
@@ -266,7 +284,7 @@ extern int ksu_handle_rename(struct dentry *old_dentry, struct dentry *new_dentr
         ksud_c = f.read()
 
     ksud_rc_target = '"on post-fs-data\\n"'
-    ksud_rc_replacement = '"on post-fs-data\\n\\t    mkdir /data/adb 0755 root root\\n\\t    mkdir /data/adb/ksu 0755 root root\\n\\t    mkdir /data/adb/modules 0755 root root\\n\\t    mkdir /data/adb/post-fs-data.d 0755 root root\\n\\t    mkdir /data/adb/service.d 0755 root root\\n"'
+    ksud_rc_replacement = '"on post-fs-data\\n\\t    mkdir /data/adb 0755 root root\\n\\t    mkdir /data/adb/ksu 0755 root root\\n\\t    mkdir /data/adb/ksu/bin 0755 root root\\n\\t    mkdir /data/adb/modules 0755 root root\\n\\t    mkdir /data/adb/post-fs-data.d 0755 root root\\n\\t    mkdir /data/adb/service.d 0755 root root\\n"'
     if "mkdir /data/adb" not in ksud_c:
         assert ksud_rc_target in ksud_c, f"Failed to locate on post-fs-data in {ksud_path}"
         ksud_c = ksud_c.replace(ksud_rc_target, ksud_rc_replacement, 1)
