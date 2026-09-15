@@ -325,7 +325,16 @@ The CI/CD build engine cross-compiles on GitHub Actions runners (`ubuntu-22.04`)
 
 This project is licensed under the **[GNU General Public License v2.0 (GPL-2.0)](LICENSE)**.
 
-### Disclaimer of Warranty (GPLv2 Sections 11 & 12)
+The GNU GPL is the most widely used free software license and features a strong copyleft requirement. When distributing derived works, the source code of the work must be made available under the same license.
+
+| 🟢 Permissions | 🔴 Limitations | 🟡 Conditions |
+| :--- | :--- | :--- |
+| ✔️ **Commercial use** | ❌ **Liability** | ℹ️ **License and copyright notice** |
+| ✔️ **Modification** | ❌ **Warranty** | ℹ️ **State changes** |
+| ✔️ **Distribution** | | ℹ️ **Disclose source** |
+| ✔️ **Private use** | | ℹ️ **Same license (Copyleft)** |
+
+### ⚖️ Disclaimer of Warranty & Limitation of Liability (GPLv2 §§ 11-12)
 ```text
 BECAUSE THE PROGRAM IS LICENSED FREE OF CHARGE, THERE IS NO WARRANTY FOR THE PROGRAM,
 TO THE EXTENT PERMITTED BY APPLICABLE LAW. EXCEPT WHEN OTHERWISE STATED IN WRITING THE
@@ -336,7 +345,7 @@ TO THE QUALITY AND PERFORMANCE OF THE PROGRAM IS WITH YOU. SHOULD THE PROGRAM PR
 DEFECTIVE, YOU ASSUME THE COST OF ALL NECESSARY SERVICING, REPAIR OR CORRECTION.
 ```
 
-To review the complete license terms, please visit the [LICENSE](LICENSE) file.
+For the complete legal text and terms, please review the [LICENSE](LICENSE) document.
 
 ---
 
