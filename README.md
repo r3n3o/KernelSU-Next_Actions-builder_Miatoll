@@ -45,8 +45,9 @@
 - [6. Diagnostics, Logging & Disaster Recovery](#-6-diagnostics-logging--disaster-recovery)
 - [7. Post-Installation Verification & Verification Commands](#-7-post-installation-verification--verification-commands)
 - [8. Build System & Toolchain Specification](#-8-build-system--toolchain-specification)
-- [9. License & Warranty Disclaimer](#-9-license--warranty-disclaimer)
-- [10. Upstream Credits & Acknowledgments](#-10-upstream-credits--acknowledgments)
+- [9. Documentation & Release Templates (`/.docs/`)](#-9-documentation--release-templates-docs)
+- [10. License & Warranty Disclaimer](#-10-license--warranty-disclaimer)
+- [11. Upstream Credits & Acknowledgments](#-11-upstream-credits--acknowledgments)
 
 ---
 
@@ -90,7 +91,7 @@ Targeting the **Qualcomm Snapdragon 720G (SM6250 / ATOLL-AB)** architecture with
 |                        KERNELSPACE INTEGRATION LAYER                        |
 +-----------------------------------------------------------------------------+
 |  [KernelSU-Next Driver v3.4.0]   |  Supercall Handlers & Syscall Intercept  |
-|  - UAPI Interface (2==2)         |  - Zero /system Partition Footprint      |
+|  - UAPI v4 Interface (4==4)      |  - Zero /system Partition Footprint      |
 |  - App Profile Enforcement       |  - Root Isolation by App UID             |
 +----------------------------------+------------------------------------------+
 |  [Wireless Ingestion Engine]     |  [Hardware Gadget Subsystem]             |
@@ -321,7 +322,19 @@ The CI/CD build engine cross-compiles on GitHub Actions runners (`ubuntu-22.04`)
 
 ---
 
-## 📜 9. License & Warranty Disclaimer
+## 📚 9. Documentation & Release Templates (`/.docs/`)
+
+All publication guides, release changelogs, and community forum templates are located in the [`.docs/`](.docs/) directory:
+
+| Document | Purpose / Target Platform |
+| :--- | :--- |
+| **[`/.docs/GITHUB_RELEASE_NOTES.md`](.docs/GITHUB_RELEASE_NOTES.md)** | Ready-to-copy Markdown release template with disclaimers, feature list, and flashing instructions for GitHub Releases (`v3.4.0-A16-STABLE`). |
+| **[`/.docs/XDA_THREAD_TEMPLATE.md`](.docs/XDA_THREAD_TEMPLATE.md)** | Native BBCode thread template for **XDA Developers** with custom badges, device matrix, interactive spoilers, and direct screenshot embedding. |
+| **[`/.docs/README.md`](.docs/README.md)** | Index and overview of all documentation resources and hardware targets. |
+
+---
+
+## 📜 10. License & Warranty Disclaimer
 
 This project is licensed under the **[GNU General Public License v2.0 (GPL-2.0)](LICENSE)**.
 
@@ -349,7 +362,7 @@ For the complete legal text and terms, please review the [LICENSE](LICENSE) docu
 
 ---
 
-## 🤝 10. Upstream Credits & Acknowledgments
+## 🤝 11. Upstream Credits & Acknowledgments
 
 * **Kernel Source Base**: [crDroid Android Team](https://github.com/crdroidandroid/android_kernel_xiaomi_sm6250) & [LineageOS](https://github.com/LineageOS)
 * **KernelSU-Next Framework**: [rifsxd](https://github.com/rifsxd/KernelSU-Next) & [tiann](https://github.com/tiann/KernelSU)
