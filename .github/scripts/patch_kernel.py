@@ -32,7 +32,7 @@ extern int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr,
         f.write(exec_c)
     print("[+] Successfully patched fs/exec.c with KernelSU execveat hook")
 
-    # 2. fs/open.c (faccessat hook)
+    # 2. fs/open.c (faccessat hook and Android 16 dex security shield)
     with open("fs/open.c", "r", encoding="utf-8") as f:
         open_c = f.read()
 
@@ -45,13 +45,22 @@ extern int ksu_handle_faccessat(int *dfd, const char __user **filename_user, int
     open_call = """
 #ifdef CONFIG_KSU
 	ksu_handle_faccessat(&dfd, &filename, &mode, NULL);
+	if (mode & 2) {
+		char kbuf[64];
+		if (filename && strncpy_from_user(kbuf, filename, sizeof(kbuf) - 1) > 0) {
+			kbuf[sizeof(kbuf) - 1] = '\\0';
+			if (strstr(kbuf, ".jar") || strstr(kbuf, "main.jar")) {
+				return -EACCES;
+			}
+		}
+	}
 #endif
 """
     open_c, n2 = re.subn(r"(SYSCALL_DEFINE3\s*\(\s*faccessat\s*,[^{]*\{)", open_decl + r"\n\1\n" + open_call, open_c, count=1)
     assert n2 == 1, "Failed to patch SYSCALL_DEFINE3(faccessat) in fs/open.c"
     with open("fs/open.c", "w", encoding="utf-8") as f:
         f.write(open_c)
-    print("[+] Successfully patched fs/open.c with KernelSU faccessat hook")
+    print("[+] Successfully patched fs/open.c with KernelSU faccessat hook and Android 16 dex security shield")
 
     # 3. fs/read_write.c (vfs_read hook)
     with open("fs/read_write.c", "r", encoding="utf-8") as f:
@@ -76,7 +85,7 @@ extern int ksu_handle_vfs_read(struct file **file_ptr, char __user **buf_ptr,
         f.write(rw_c)
     print("[+] Successfully patched fs/read_write.c with KernelSU vfs_read hook")
 
-    # 4. fs/stat.c (vfs_statx hook)
+    # 4. fs/stat.c (vfs_statx hook and Android 16 dex write bit mask)
     with open("fs/stat.c", "r", encoding="utf-8") as f:
         stat_c = f.read()
 
@@ -92,9 +101,27 @@ extern int ksu_handle_stat(int *dfd, const char __user **filename_user, int *fla
 """
     stat_c, n4 = re.subn(r"((?:static\s+)?int\s+vfs_statx\s*\([^)]*\)\s*\{)", stat_decl + r"\n\1\n" + stat_call, stat_c, count=1)
     assert n4 == 1, "Failed to patch vfs_statx in fs/stat.c"
+
+    statx_out_target = "out:\n\treturn error;"
+    statx_out_repl = """#ifdef CONFIG_KSU
+	if (!error && stat && filename) {
+		char kbuf[64];
+		if (strncpy_from_user(kbuf, filename, sizeof(kbuf) - 1) > 0) {
+			kbuf[sizeof(kbuf) - 1] = '\\0';
+			if (strstr(kbuf, ".jar") || strstr(kbuf, "main.jar")) {
+				stat->mode &= ~0222;
+			}
+		}
+	}
+#endif
+out:
+	return error;"""
+    if statx_out_target in stat_c:
+        stat_c = stat_c.replace(statx_out_target, statx_out_repl, 1)
+
     with open("fs/stat.c", "w", encoding="utf-8") as f:
         f.write(stat_c)
-    print("[+] Successfully patched fs/stat.c with KernelSU stat hook")
+    print("[+] Successfully patched fs/stat.c with KernelSU stat hook and Android 16 dex write bit mask")
 
     # 4b. fs/devpts/inode.c (Terminal PTY inode hook for terminal emulators like nhterm & termux)
     with open("fs/devpts/inode.c", "r", encoding="utf-8") as f:
