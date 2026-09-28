@@ -63,7 +63,7 @@ jobs:
           cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.9.5
 
-      - name: Apply KernelSU-Next VFS Hooks and Version 33214 Compatibility
+      - name: Apply KernelSU-Next VFS Hooks and Version 33294 Compatibility
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
           python3 $GITHUB_WORKSPACE/.github/scripts/patch_kernel.py

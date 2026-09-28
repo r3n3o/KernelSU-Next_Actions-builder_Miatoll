@@ -7,7 +7,7 @@
 [![CI/CD Build Pipeline](https://img.shields.io/github/actions/workflow/status/r3n3o/KernelSU-Next_Actions-builder_Miatoll/miatoll_nethunter_kernelsu.yml?branch=main&style=for-the-badge&logo=githubactions&logoColor=white&label=CI%2FCD%20Build)](https://github.com/r3n3o/KernelSU-Next_Actions-builder_Miatoll/actions)
 [![Kernel Version](https://img.shields.io/badge/Kernel-Linux%204.14.357--openela-blue?style=for-the-badge&logo=linux&logoColor=white)](https://github.com/crdroidandroid/android_kernel_xiaomi_sm6250)
 [![Target Android](https://img.shields.io/badge/Android%20Target-16%20(crDroid%2016%20%2F%20LOS%2022.2)-green?style=for-the-badge&logo=android&logoColor=white)](https://crdroid.net)
-[![KernelSU-Next](https://img.shields.io/badge/KernelSU--Next-v3.3.0%20(Legacy%20UAPI)-red?style=for-the-badge&logo=roots&logoColor=white)](https://github.com/rifsxd/KernelSU-Next)
+[![KernelSU-Next](https://img.shields.io/badge/KernelSU--Next-v3.4.0%20(Legacy%20UAPI)-red?style=for-the-badge&logo=roots&logoColor=white)](https://github.com/rifsxd/KernelSU-Next)
 [![Tested Device](https://img.shields.io/badge/Tested%20Device-Joyeuse%20Only-success?style=for-the-badge&logo=xiaomi&logoColor=white)](https://github.com/r3n3o/KernelSU-Next_Actions-builder_Miatoll#1-hardware--software-compatibility-matrix)
 [![License](https://img.shields.io/badge/License-GPL--2.0-yellow?style=for-the-badge&logo=opensourceinitiative&logoColor=white)](LICENSE)
 
@@ -25,7 +25,7 @@
 
 > [!IMPORTANT]
 > ### 🔬 HARDWARE VALIDATION BOUNDARY: STRICTLY TESTED ON `joyeuse` ONLY
-> This kernel release has been **compiled, flashed, debugged, and verified on real hardware EXCLUSIVELY on the Xiaomi Redmi Note 9 Pro (`joyeuse`)**.
+> This kernel release has been **compiled, flashed, debugged, and verified on real hardware EXCLUSIVELY on the Xiaomi Redmi Note 9 Pro (`joyeuse`) running crDroid 16.0 Vanilla Edition (Android 16 / SDK 36, without pre-installed GApps)**.
 > 
 > Although the upstream kernel source tree is unified for the Qualcomm SM6250 (Miatoll) platform, other variant devices (**`curtana`** [Redmi Note 9S], **`gram`** [POCO M2 Pro], and **`excalibur`** [Redmi Note 9 Pro Max]) have **NOT BEEN TESTED** on hardware by the author. Flashing on non-`joyeuse` variants is done under your own discretion and testing responsibility.
 
@@ -69,7 +69,7 @@ Targeting the **Qualcomm Snapdragon 720G (SM6250 / ATOLL-AB)** architecture with
 
 | Operating System / Base | Version / Android API | Status | Technical Profile |
 | :--- | :--- | :--- | :--- |
-| **crDroid Android** | **16.0 (Android 16 / SDK 36)** | 🟢 **Fully Supported** | Primary reference ROM; full PTY & namespace stability. |
+| **crDroid Android** | **16.0 Vanilla (Android 16 / SDK 36)** | 🟢 **Fully Supported (Tested)** | Primary reference ROM; tested without GApps; full PTY & namespace stability. |
 | **LineageOS** | **22.2 (Android 16 / SDK 36)** | 🟢 **Fully Supported** | Compatible with standard LineageOS A16 device tree. |
 | **AOSP / Generic Custom ROMs** | **Android 15 / 16 (A15/A16)** | 🟢 **Supported** | Compatible with modern dynamic super partition layouts. |
 | **Stock MIUI / HyperOS** | Any (Android 10 - 14) | 🔴 **Incompatible** | Proprietary Xiaomi display drivers will bootloop. |
@@ -85,11 +85,11 @@ Targeting the **Qualcomm Snapdragon 720G (SM6250 / ATOLL-AB)** architecture with
 +-----------------------------------------------------------------------------+
 |  Kali NetHunter KeX (XFCE4 GUI)  |  NetHunter CLI     |  Termux Root chroot |
 +----------------------------------+--------------------+---------------------+
-|  KernelSU-Next Manager (v3.3.0)  |  Android Root Apps (Isolated Mount NS)   |
+|  KernelSU-Next Manager (v3.4.0)  |  Android Root Apps (Isolated Mount NS)   |
 +=============================================================================+
 |                        KERNELSPACE INTEGRATION LAYER                        |
 +-----------------------------------------------------------------------------+
-|  [KernelSU-Next Driver v3.3.0]   |  Supercall Handlers & Syscall Intercept  |
+|  [KernelSU-Next Driver v3.4.0]   |  Supercall Handlers & Syscall Intercept  |
 |  - UAPI Interface (2==2)         |  - Zero /system Partition Footprint      |
 |  - App Profile Enforcement       |  - Root Isolation by App UID             |
 +----------------------------------+------------------------------------------+
@@ -107,7 +107,7 @@ Targeting the **Qualcomm Snapdragon 720G (SM6250 / ATOLL-AB)** architecture with
 ```
 
 ### 🌟 Key Feature Highlights
-* **Native KernelSU-Next v3.3.0**: Embedded into the kernel tree with manual legacy syscall hooks for pristine su management and complete invisibility to userspace root detection.
+* **Native KernelSU-Next v3.4.0**: Embedded into the kernel tree with manual legacy syscall hooks for pristine su management and complete invisibility to userspace root detection.
 * **BadUSB & HID Injection**: Emulate USB keyboards and mice directly from your phone through `/dev/hidg0` and `/dev/hidg1`.
 * **Wireless Packet Injection**: Full support for external Wi-Fi USB OTG adapters running in monitor mode and packet injection.
 * **Full Linux Namespace Isolation**: Comprehensive `CONFIG_USER_NS`, `CONFIG_PID_NS`, `CONFIG_NET_NS`, and `CONFIG_IPC_NS` allowing full chroot and rootless container virtualization.
@@ -203,10 +203,10 @@ Get-FileHash .\Miatoll-NetHunter-Kernel.zip -Algorithm SHA256
 ### Step 3: Install KernelSU-Next Manager APK
 
 Once Android boots:
-1. Download and install the **[KernelSU-Next Manager APK (v3.3.0+)](https://github.com/rifsxd/KernelSU-Next/releases)**.
+1. Download and install the **[KernelSU-Next Manager APK (v3.4.0+)](https://github.com/rifsxd/KernelSU-Next/releases)**.
 2. Open the Manager app and verify:
    * **State**: `Working`
-   * **Version**: `3.3.0:KernelSU`
+   * **Version**: `3.4.0:KernelSU` (Build `33294`)
    * **Mode**: `Non-GKI (Legacy)`
 3. Go to **Superuser** ➔ Enable Root access individually for your target applications (e.g., `Termux`, `NetHunter`).
 
@@ -278,8 +278,8 @@ su -c "uname -a; /data/adb/ksud -V; su -v"
 *Expected Output:*
 ```text
 Linux crDroid-joyeuse 4.14.357-openela-Stormbreaker-g8b4afb3dd59e ... aarch64
-KernelSU-Next v3.3.0
-3.3.0:KernelSU
+KernelSU-Next v3.4.0
+3.4.0:KernelSU
 ```
 
 ---

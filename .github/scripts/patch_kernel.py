@@ -400,7 +400,7 @@ static long anon_ksu_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
 
     case 2: { // KSU_IOCTL_GET_INFO
         struct ksu_get_info_cmd info = {
-            .version = 33214,
+            .version = 33294,
             .flags = KSU_GET_INFO_FLAG_MANAGER,
             .features = 20,
             .uapi_version = 2
@@ -532,7 +532,7 @@ static long anon_ksu_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
 
     case 99: { // KSU_IOCTL_GET_VERSION_TAG
         struct ksu_get_version_tag_cmd tag = {0};
-        strncpy(tag.tag, "v3.3.0", sizeof(tag.tag) - 1);
+        strncpy(tag.tag, "v3.4.0", sizeof(tag.tag) - 1);
         if (copy_to_user(argp, &tag, sizeof(tag)))
             return -EFAULT;
         return 0;
@@ -628,7 +628,7 @@ extern int ksu_handle_reboot(int magic1, int magic2, unsigned int cmd, void __us
         f.write(rb_c)
     print("[+] Successfully patched kernel/reboot.c with KernelSU reboot supercall")
 
-    # 13. Patch KernelSU Makefile (Compile supercall.o & set KSU_VERSION to 33214)
+    # 13. Patch KernelSU Makefile (Compile supercall.o & set KSU_VERSION to 33294)
     mk_candidates = [
         "KernelSU/kernel/Makefile",
         "drivers/kernelsu/Makefile"
@@ -639,14 +639,14 @@ extern int ksu_handle_reboot(int magic1, int magic2, unsigned int cmd, void __us
             mk_c = f.read()
         target_version_expr = "$(eval KSU_VERSION=$(shell expr 10000 + $(KSU_GIT_VERSION) + 200))"
         if target_version_expr in mk_c:
-            mk_c = mk_c.replace(target_version_expr, "$(eval KSU_VERSION=33214)")
+            mk_c = mk_c.replace(target_version_expr, "$(eval KSU_VERSION=33294)")
         if "ccflags-y += -DKSU_VERSION=16" in mk_c:
-            mk_c = mk_c.replace("ccflags-y += -DKSU_VERSION=16", "ccflags-y += -DKSU_VERSION=33214")
+            mk_c = mk_c.replace("ccflags-y += -DKSU_VERSION=16", "ccflags-y += -DKSU_VERSION=33294")
         if "kernelsu-objs += supercall.o" not in mk_c:
             mk_c = mk_c.replace("kernelsu-objs += core_hook.o", "kernelsu-objs += core_hook.o\nkernelsu-objs += supercall.o")
         with open(mk_path, "w", encoding="utf-8") as f:
             f.write(mk_c)
-        print(f"[+] Successfully updated {mk_path} with supercall.o and KSU_VERSION=33214")
+        print(f"[+] Successfully updated {mk_path} with supercall.o and KSU_VERSION=33294")
 
     print("[*] All KernelSU-Next VFS, Security & Supercall hooks applied successfully!")
 
