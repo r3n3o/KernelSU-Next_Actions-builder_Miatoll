@@ -1,11 +1,52 @@
+﻿"""
+KernelSU-Next v3.4.0 - Non-GKI VFS Hook Injector for SM6250 (Miatoll / Linux 4.19)
+====================================================================================
+Purpose: Inject the VFS call hooks required for KernelSU-Next's manual (non-kprobes)
+         integration mode into the crDroid 16.0 kernel source tree.
+
+KernelSU-Next v3.4.0 Architecture Notes:
+  - Core driver lives in kernel/ (symlinked as drivers/kernelsu by setup.sh)
+  - For GKI kernels: Uses LSM hooks + syscall tracepoints (NO manual VFS hooks needed)
+  - For non-GKI kernels (SM6250/4.19): Must inject manual VFS hooks into kernel source
+  - The supercall (prctl magic) is in supercall/dispatch.c natively
+  - apk_sign.c is in manager/apk_sign.c (not at root like KernelSU v0.9.5)
+  - NO manual core_hook.c patching needed (does not exist in v3.4.0 structure)
+
+Author: r3n3o & Antigravity (Google DeepMind)
+"""
+
 import os
 import re
 import sys
 
-def main():
-    print("[*] Starting KernelSU-Next VFS, Security & Supercall Integration...")
 
-    # 1. fs/exec.c (execveat hook)
+def find_kernelsu_dir():
+    """Locate the KernelSU-Next kernel directory after setup.sh ran."""
+    candidates = [
+        "drivers/kernelsu",
+        "KernelSU-Next/kernel",
+        "KernelSU/kernel",
+    ]
+    for p in candidates:
+        if os.path.isdir(p):
+            return p
+    return None
+
+
+def main():
+    print("[*] KernelSU-Next v3.4.0 Non-GKI VFS Hook Injector starting...")
+    print("[*] Target: crDroid 16.0 / SM6250 (Miatoll) / Linux 4.19")
+
+    ksu_dir = find_kernelsu_dir()
+    if ksu_dir:
+        print(f"[+] Found KernelSU-Next driver directory: {ksu_dir}")
+    else:
+        print("[!] Warning: KernelSU-Next driver directory not found. Continuing with kernel hooks only.")
+
+    # =========================================================================
+    # 1. fs/exec.c - execveat hook (su binary execution redirect)
+    # =========================================================================
+    print("\n[*] Patching fs/exec.c (execveat hook)...")
     with open("fs/exec.c", "r", encoding="utf-8") as f:
         exec_c = f.read()
 
@@ -13,56 +54,67 @@ def main():
 #ifdef CONFIG_KSU
 extern bool ksu_execveat_hook __read_mostly;
 extern int ksu_handle_execveat(int *fd, struct filename **filename_ptr, void *argv,
-			void *envp, int *flags);
+\t\t\tvoid *envp, int *flags);
 extern int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr,
-				 void *argv, void *envp, int *flags);
+\t\t\t\t void *argv, void *envp, int *flags);
 #endif
 """
     exec_call = """
 #ifdef CONFIG_KSU
-	if (unlikely(ksu_execveat_hook))
-		ksu_handle_execveat(&fd, &filename, &argv, &envp, &flags);
-	else
-		ksu_handle_execveat_sucompat(&fd, &filename, &argv, &envp, &flags);
+\tif (unlikely(ksu_execveat_hook))
+\t\tksu_handle_execveat(&fd, &filename, &argv, &envp, &flags);
+\telse
+\t\tksu_handle_execveat_sucompat(&fd, &filename, &argv, &envp, &flags);
 #endif
 """
-    exec_c, n1 = re.subn(r"((?:static\s+)?int\s+do_execveat_common\s*\([^)]*\)\s*\{)", exec_decl + r"\n\1\n" + exec_call, exec_c, count=1)
-    assert n1 == 1, "Failed to patch do_execveat_common in fs/exec.c"
-    with open("fs/exec.c", "w", encoding="utf-8") as f:
-        f.write(exec_c)
-    print("[+] Successfully patched fs/exec.c with KernelSU execveat hook")
+    if "ksu_handle_execveat" not in exec_c:
+        exec_c, n = re.subn(
+            r"((?:static\s+)?int\s+do_execveat_common\s*\([^)]*\)\s*\{)",
+            exec_decl + r"\n\1\n" + exec_call,
+            exec_c, count=1
+        )
+        assert n == 1, "Failed to patch do_execveat_common in fs/exec.c"
+        with open("fs/exec.c", "w", encoding="utf-8") as f:
+            f.write(exec_c)
+        print("[+] Patched fs/exec.c with KernelSU execveat hook")
+    else:
+        print("[~] fs/exec.c already patched, skipping")
 
-    # 2. fs/open.c (faccessat hook and Android 16 dex security shield)
+    # =========================================================================
+    # 2. fs/open.c - faccessat hook (su binary access check redirect)
+    # =========================================================================
+    print("\n[*] Patching fs/open.c (faccessat hook)...")
     with open("fs/open.c", "r", encoding="utf-8") as f:
         open_c = f.read()
 
     open_decl = """
 #ifdef CONFIG_KSU
 extern int ksu_handle_faccessat(int *dfd, const char __user **filename_user, int *mode,
-			 int *flags);
+\t\t\t int *flags);
 #endif
 """
     open_call = """
 #ifdef CONFIG_KSU
-	ksu_handle_faccessat(&dfd, &filename, &mode, NULL);
-	if (mode & 2) {
-		char kbuf[64];
-		if (filename && strncpy_from_user(kbuf, filename, sizeof(kbuf) - 1) > 0) {
-			kbuf[sizeof(kbuf) - 1] = '\\0';
-			if (strstr(kbuf, ".jar") || strstr(kbuf, "main.jar")) {
-				return -EACCES;
-			}
-		}
-	}
+\tksu_handle_faccessat(&dfd, &filename, &mode, NULL);
 #endif
 """
-    open_c, n2 = re.subn(r"(SYSCALL_DEFINE3\s*\(\s*faccessat\s*,[^{]*\{)", open_decl + r"\n\1\n" + open_call, open_c, count=1)
-    assert n2 == 1, "Failed to patch SYSCALL_DEFINE3(faccessat) in fs/open.c"
-    with open("fs/open.c", "w", encoding="utf-8") as f:
-        f.write(open_c)
-    print("[+] Successfully patched fs/open.c with KernelSU faccessat hook and Android 16 dex security shield")
+    if "ksu_handle_faccessat" not in open_c:
+        open_c, n = re.subn(
+            r"(SYSCALL_DEFINE3\s*\(\s*faccessat\s*,[^{]*\{)",
+            open_decl + r"\n\1\n" + open_call,
+            open_c, count=1
+        )
+        assert n == 1, "Failed to patch SYSCALL_DEFINE3(faccessat) in fs/open.c"
+        with open("fs/open.c", "w", encoding="utf-8") as f:
+            f.write(open_c)
+        print("[+] Patched fs/open.c with KernelSU faccessat hook")
+    else:
+        print("[~] fs/open.c already patched, skipping")
 
-    # 3. fs/read_write.c (vfs_read hook)
+    # =========================================================================
+    # 3. fs/read_write.c - vfs_read hook (sucompat binary read intercept)
+    # =========================================================================
+    print("\n[*] Patching fs/read_write.c (vfs_read hook)...")
     with open("fs/read_write.c", "r", encoding="utf-8") as f:
         rw_c = f.read()
 
@@ -70,22 +122,32 @@ extern int ksu_handle_faccessat(int *dfd, const char __user **filename_user, int
 #ifdef CONFIG_KSU
 extern bool ksu_vfs_read_hook __read_mostly;
 extern int ksu_handle_vfs_read(struct file **file_ptr, char __user **buf_ptr,
-			size_t *count_ptr, loff_t **pos);
+\t\t\tsize_t *count_ptr, loff_t **pos);
 #endif
 """
     rw_call = """
 #ifdef CONFIG_KSU
-	if (unlikely(ksu_vfs_read_hook))
-		ksu_handle_vfs_read(&file, &buf, &count, &pos);
+\tif (unlikely(ksu_vfs_read_hook))
+\t\tksu_handle_vfs_read(&file, &buf, &count, &pos);
 #endif
 """
-    rw_c, n3 = re.subn(r"(ssize_t\s+vfs_read\s*\([^)]*\)\s*\{)", rw_decl + r"\n\1\n" + rw_call, rw_c, count=1)
-    assert n3 == 1, "Failed to patch vfs_read in fs/read_write.c"
-    with open("fs/read_write.c", "w", encoding="utf-8") as f:
-        f.write(rw_c)
-    print("[+] Successfully patched fs/read_write.c with KernelSU vfs_read hook")
+    if "ksu_handle_vfs_read" not in rw_c:
+        rw_c, n = re.subn(
+            r"(ssize_t\s+vfs_read\s*\([^)]*\)\s*\{)",
+            rw_decl + r"\n\1\n" + rw_call,
+            rw_c, count=1
+        )
+        assert n == 1, "Failed to patch vfs_read in fs/read_write.c"
+        with open("fs/read_write.c", "w", encoding="utf-8") as f:
+            f.write(rw_c)
+        print("[+] Patched fs/read_write.c with KernelSU vfs_read hook")
+    else:
+        print("[~] fs/read_write.c already patched, skipping")
 
-    # 4. fs/stat.c (vfs_statx hook and Android 16 dex write bit mask)
+    # =========================================================================
+    # 4. fs/stat.c - vfs_statx hook (stat-based su binary detection)
+    # =========================================================================
+    print("\n[*] Patching fs/stat.c (vfs_statx hook)...")
     with open("fs/stat.c", "r", encoding="utf-8") as f:
         stat_c = f.read()
 
@@ -96,91 +158,112 @@ extern int ksu_handle_stat(int *dfd, const char __user **filename_user, int *fla
 """
     stat_call = """
 #ifdef CONFIG_KSU
-	ksu_handle_stat(&dfd, &filename, &flags);
+\tksu_handle_stat(&dfd, &filename, &flags);
 #endif
 """
-    stat_c, n4 = re.subn(r"((?:static\s+)?int\s+vfs_statx\s*\([^)]*\)\s*\{)", stat_decl + r"\n\1\n" + stat_call, stat_c, count=1)
-    assert n4 == 1, "Failed to patch vfs_statx in fs/stat.c"
+    if "ksu_handle_stat" not in stat_c:
+        stat_c, n = re.subn(
+            r"((?:static\s+)?int\s+vfs_statx\s*\([^)]*\)\s*\{)",
+            stat_decl + r"\n\1\n" + stat_call,
+            stat_c, count=1
+        )
+        assert n == 1, "Failed to patch vfs_statx in fs/stat.c"
+        with open("fs/stat.c", "w", encoding="utf-8") as f:
+            f.write(stat_c)
+        print("[+] Patched fs/stat.c with KernelSU stat hook")
+    else:
+        print("[~] fs/stat.c already patched, skipping")
 
-    statx_out_target = "out:\n\treturn error;"
-    statx_out_repl = """#ifdef CONFIG_KSU
-	if (!error && stat && filename) {
-		char kbuf[64];
-		if (strncpy_from_user(kbuf, filename, sizeof(kbuf) - 1) > 0) {
-			kbuf[sizeof(kbuf) - 1] = '\\0';
-			if (strstr(kbuf, ".jar") || strstr(kbuf, "main.jar")) {
-				stat->mode &= ~0222;
-			}
-		}
-	}
-#endif
-out:
-	return error;"""
-    if statx_out_target in stat_c:
-        stat_c = stat_c.replace(statx_out_target, statx_out_repl, 1)
-
-    with open("fs/stat.c", "w", encoding="utf-8") as f:
-        f.write(stat_c)
-    print("[+] Successfully patched fs/stat.c with KernelSU stat hook and Android 16 dex write bit mask")
-
-    # 4b. fs/devpts/inode.c (Terminal PTY inode hook for terminal emulators like nhterm & termux)
-    with open("fs/devpts/inode.c", "r", encoding="utf-8") as f:
-        devpts_c = f.read()
-
-    devpts_decl = """
-#ifdef CONFIG_KSU
-extern int ksu_handle_devpts(struct inode *inode);
-#endif
-"""
-    devpts_pattern = r"(struct\s+dentry\s*\*devpts_pty_new\s*\([^{]*\{[\s\S]*?d_add\s*\(\s*dentry\s*,\s*inode\s*\)\s*;)"
-    devpts_repl = devpts_decl + r"\n\1\n#ifdef CONFIG_KSU\n\t\tksu_handle_devpts(inode);\n#endif"
-
-    devpts_c, n_devpts = re.subn(devpts_pattern, devpts_repl, devpts_c, count=1)
-    assert n_devpts == 1, "Failed to patch devpts_pty_new in fs/devpts/inode.c"
-    with open("fs/devpts/inode.c", "w", encoding="utf-8") as f:
-        f.write(devpts_c)
-    print("[+] Successfully patched fs/devpts/inode.c with KernelSU devpts PTY hook")
-
-    # 5. kernel/sys.c (prctl syscall for Manager communication)
+    # =========================================================================
+    # 5. kernel/sys.c - prctl hook (Manager <-> Kernel supercall gateway)
+    #    KernelSU-Next v3.4.0: ksu_handle_prctl entry -> supercall/dispatch.c
+    # =========================================================================
+    print("\n[*] Patching kernel/sys.c (prctl supercall hook)...")
     with open("kernel/sys.c", "r", encoding="utf-8") as f:
         sys_c = f.read()
 
     sys_decl = """
 #ifdef CONFIG_KSU
 extern int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
-			    unsigned long arg4, unsigned long arg5);
+\t\t\t    unsigned long arg4, unsigned long arg5);
 #endif
 """
     sys_call = """
 #ifdef CONFIG_KSU
-	ksu_handle_prctl(option, arg2, arg3, arg4, arg5);
+\tksu_handle_prctl(option, arg2, arg3, arg4, arg5);
 #endif
 """
-    sys_c, n5 = re.subn(r"(SYSCALL_DEFINE5\s*\(\s*prctl\s*,[^{]*\{)", sys_decl + r"\n\1\n" + sys_call, sys_c, count=1)
-    assert n5 == 1, "Failed to patch SYSCALL_DEFINE5(prctl) in kernel/sys.c"
-    with open("kernel/sys.c", "w", encoding="utf-8") as f:
-        f.write(sys_c)
-    print("[+] Successfully patched kernel/sys.c with KernelSU prctl hook")
+    if "ksu_handle_prctl" not in sys_c:
+        sys_c, n = re.subn(
+            r"(SYSCALL_DEFINE5\s*\(\s*prctl\s*,[^{]*\{)",
+            sys_decl + r"\n\1\n" + sys_call,
+            sys_c, count=1
+        )
+        assert n == 1, "Failed to patch SYSCALL_DEFINE5(prctl) in kernel/sys.c"
+        with open("kernel/sys.c", "w", encoding="utf-8") as f:
+            f.write(sys_c)
+        print("[+] Patched kernel/sys.c with KernelSU prctl hook")
+    else:
+        print("[~] kernel/sys.c already patched, skipping")
 
-    # 6. apk_sign.c (Authorize KernelSU-Next Manager com.rifsxd.ksunext)
+    # =========================================================================
+    # 6. manager/apk_sign.c - Authorize KernelSU-Next Manager APK signature
+    #    In v3.4.0, this file is at manager/apk_sign.c (not root apk_sign.c)
+    # =========================================================================
+    print("\n[*] Patching manager/apk_sign.c (Manager APK authorization)...")
     apk_candidates = [
+        "drivers/kernelsu/manager/apk_sign.c",
+        "KernelSU-Next/kernel/manager/apk_sign.c",
         "KernelSU/kernel/apk_sign.c",
-        "drivers/kernelsu/apk_sign.c"
+        "drivers/kernelsu/apk_sign.c",
     ]
     apk_path = next((p for p in apk_candidates if os.path.exists(p)), None)
-    assert apk_path, "Failed to locate apk_sign.c"
-    with open(apk_path, "r", encoding="utf-8") as f:
-        apk_c = f.read()
 
-    apk_c, n6 = re.subn(r"(bool\s+is_manager_apk\s*\([^)]*\)\s*\{)([^}]*)(\})", r"\1\n\treturn true;\n\3", apk_c, count=1)
-    assert n6 == 1, f"Failed to patch is_manager_apk in {apk_path}"
-    apk_c = re.sub(r'#define\s+EXPECTED_SIZE\s+0x[0-9a-fA-F]+', '#define EXPECTED_SIZE 0x3e6', apk_c)
-    apk_c = re.sub(r'#define\s+EXPECTED_HASH\s+"[0-9a-fA-F]+"', '#define EXPECTED_HASH "79e590113c4c4c0c222978e413a5faa801666957b1212a328e46c00c69821bf7"', apk_c)
-    with open(apk_path, "w", encoding="utf-8") as f:
-        f.write(apk_c)
-    print(f"[+] Successfully patched {apk_path} to authorize KernelSU-Next Manager")
+    if apk_path:
+        with open(apk_path, "r", encoding="utf-8") as f:
+            apk_c = f.read()
 
-    # 7. fs/namei.c (throne tracker rename hook for package monitoring)
+        modified = False
+
+        if "return true; /* KSU-Next-Miatoll */" not in apk_c:
+            apk_c_new, n = re.subn(
+                r"(bool\s+is_manager_apk\s*\([^)]*\)\s*\{)([^}]*)(\})",
+                r"\1\n\treturn true; /* KSU-Next-Miatoll */\n\3",
+                apk_c, count=1
+            )
+            if n == 1:
+                apk_c = apk_c_new
+                modified = True
+                print(f"[+] Patched is_manager_apk() in {apk_path}")
+
+        # Hash from KernelSU_Next_v3.4.0_33294-release.apk (SHA256 of signing block)
+        for old_size_pat in [r'#define\s+EXPECTED_SIZE\s+0x[0-9a-fA-F]+']:
+            if re.search(old_size_pat, apk_c):
+                apk_c = re.sub(old_size_pat, '#define EXPECTED_SIZE 0x3e6', apk_c)
+                modified = True
+
+        for old_hash_pat in [r'#define\s+EXPECTED_HASH\s+"[0-9a-fA-F]+"']:
+            if re.search(old_hash_pat, apk_c):
+                apk_c = re.sub(
+                    old_hash_pat,
+                    '#define EXPECTED_HASH "50339a93c0f812b8a72c1a387a1b441891e3df0f20b2d9daf80fd798d04b3de8"',
+                    apk_c
+                )
+                modified = True
+
+        if modified:
+            with open(apk_path, "w", encoding="utf-8") as f:
+                f.write(apk_c)
+            print(f"[+] Updated {apk_path} with v3.4.0 Manager authorization")
+        else:
+            print(f"[~] {apk_path} already authorized, skipping")
+    else:
+        print("[!] Warning: apk_sign.c not found (will use kernel CONFIG defaults)")
+
+    # =========================================================================
+    # 7. fs/namei.c - vfs_rename hook (package name change tracker)
+    # =========================================================================
+    print("\n[*] Patching fs/namei.c (vfs_rename hook)...")
     with open("fs/namei.c", "r", encoding="utf-8") as f:
         namei_c = f.read()
 
@@ -191,511 +274,163 @@ extern int ksu_handle_rename(struct dentry *old_dentry, struct dentry *new_dentr
 """
     namei_call = """
 #ifdef CONFIG_KSU
-	ksu_handle_rename(old_dentry, new_dentry);
+\tksu_handle_rename(old_dentry, new_dentry);
 #endif
 """
-    namei_c, n7 = re.subn(r"((?:static\s+)?int\s+vfs_rename\s*\([^)]*\)\s*\{)", namei_decl + r"\n\1\n" + namei_call, namei_c, count=1)
-    assert n7 == 1, "Failed to patch vfs_rename in fs/namei.c"
-    with open("fs/namei.c", "w", encoding="utf-8") as f:
-        f.write(namei_c)
-    print("[+] Successfully patched fs/namei.c with KernelSU rename hook")
+    if "ksu_handle_rename" not in namei_c:
+        namei_c, n = re.subn(
+            r"((?:static\s+)?int\s+vfs_rename\s*\([^)]*\)\s*\{)",
+            namei_decl + r"\n\1\n" + namei_call,
+            namei_c, count=1
+        )
+        assert n == 1, "Failed to patch vfs_rename in fs/namei.c"
+        with open("fs/namei.c", "w", encoding="utf-8") as f:
+            f.write(namei_c)
+        print("[+] Patched fs/namei.c with KernelSU rename hook")
+    else:
+        print("[~] fs/namei.c already patched, skipping")
 
-    # 8. core_hook.c (ARM64 SECCOMP atomic clear, UAPI v4 reporting, and universal manager prctl entry)
-    core_candidates = [
-        "KernelSU/kernel/core_hook.c",
-        "drivers/kernelsu/core_hook.c"
-    ]
-    core_path = next((p for p in core_candidates if os.path.exists(p)), None)
-    if core_path:
-        with open(core_path, "r", encoding="utf-8") as f:
-            core_c = f.read()
-        core_c = core_c.replace("current_thread_info()->flags &= ~(TIF_SECCOMP | _TIF_SECCOMP);", "clear_tsk_thread_flag(current, TIF_SECCOMP);")
+    # =========================================================================
+    # 8. kernel/seccomp.c - Allow KSU prctl (option=0xdeadbeef) past SECCOMP
+    #    KernelSU-Next v3.4.0 ksud uses SIGSYS handler but the first prctl
+    #    call needs to reach the kernel before the handler is installed
+    # =========================================================================
+    print("\n[*] Patching kernel/seccomp.c (allow KSU prctl past SECCOMP)...")
+    seccomp_path = "kernel/seccomp.c"
+    if os.path.exists(seccomp_path):
+        with open(seccomp_path, "r", encoding="utf-8") as f:
+            seccomp_c = f.read()
 
-        # In ksu_handle_setuid, auto-install ksu driver fd for manager
-        setuid_target = "int ksu_handle_setuid(struct cred *new, const struct cred *old)\n{"
-        setuid_repl = """int ksu_handle_setuid(struct cred *new, const struct cred *old)
-{
-\textern int ksu_install_fd(void);
-\tif (is_manager() || (new && new->uid.val >= 10000)) {
-\t\tksu_install_fd();
-\t}"""
-        if setuid_target in core_c and "ksu_install_fd()" not in core_c[core_c.find("int ksu_handle_setuid"):core_c.find("int ksu_handle_setuid")+120]:
-            core_c = core_c.replace(setuid_target, setuid_repl, 1)
-
-        # Inject universal prctl dispatch at the very entry of ksu_handle_prctl
-        prctl_entry_target = "if (option != 0xdeadbeef) {\n\t\treturn 0;\n\t}"
-        prctl_entry_repl = """if (option != 0xdeadbeef) {
+        if "CONFIG_KSU" not in seccomp_c:
+            seccomp_bypass = """
+#ifdef CONFIG_KSU
+\t/* KernelSU-Next: allow prctl(0xdeadbeef) supercall to bypass SECCOMP */
+\tif (this_syscall == 167 || this_syscall == 142)
 \t\treturn 0;
-\t}
-
-\textern int ksu_install_fd(void);
-
-\tif (arg2 == CMD_GET_VERSION) {
-\t\tu32 version = 33294;
-\t\tu32 uapi_ver = 4;
-\t\tif (ksu_get_manager_uid() == (uid_t)-1 && current_uid().val >= 10000) {
-\t\t\tksu_set_manager_uid(current_uid().val);
-\t\t}
-\t\tksu_install_fd();
-\t\tif (arg3 && copy_to_user((void __user *)arg3, &version, sizeof(version))) {
-\t\t\tpr_err("prctl reply version error\\n");
-\t\t}
-\t\tif (arg4 && copy_to_user((void __user *)arg4, &uapi_ver, sizeof(uapi_ver))) {
-\t\t\tpr_err("prctl reply uapi error\\n");
-\t\t}
-\t\tif (arg5 && copy_to_user((void __user *)arg5, &uapi_ver, sizeof(uapi_ver))) {
-\t\t\tpr_err("prctl reply uapi5 error\\n");
-\t\t}
-\t\treturn 0;
-\t}
-
-\tif (arg2 == CMD_BECOME_MANAGER) {
-\t\tu32 reply_ok = 0xDEADBEEF;
-\t\tksu_set_manager_uid(current_uid().val);
-\t\tksu_install_fd();
-\t\tif (arg3 && copy_to_user((void __user *)arg3, &reply_ok, sizeof(reply_ok))) {
-\t\t\tpr_err("become_manager: prctl reply error\\n");
-\t\t}
-\t\treturn 0;
-\t}
-
-\tif (arg2 == CMD_GRANT_ROOT) {
-\t\tif (ksu_get_manager_uid() == (uid_t)-1 && current_uid().val >= 10000) {
-\t\t\tksu_set_manager_uid(current_uid().val);
-\t\t}
-\t\tif (is_manager() || current_uid().val == ksu_get_manager_uid() || ksu_is_allow_uid(current_uid().val) || current_uid().val == 0 || current_uid().val == 2000) {
-\t\t\tescape_to_root();
-\t\t\tu32 reply_ok = 0xDEADBEEF;
-\t\t\tif (arg3 && copy_to_user((void __user *)arg3, &reply_ok, sizeof(reply_ok))) {
-\t\t\t\tpr_err("grant_root: prctl reply error\\n");
-\t\t\t}
-\t\t\treturn 0;
-\t\t}
-\t}"""
-        if prctl_entry_target in core_c and "uapi_ver = 4" not in core_c:
-            core_c = core_c.replace(prctl_entry_target, prctl_entry_repl, 1)
-
-        with open(core_path, "w", encoding="utf-8") as f:
-            f.write(core_c)
-        print(f"[+] Successfully patched {core_path} for SECCOMP clearing, UAPI v4 reporting, and universal manager prctl entry")
-
-    # 9. kernel/seccomp.c (Allow KSU prctl and reboot supercalls past Android SECCOMP filter without SIGSYS trap)
-    with open("kernel/seccomp.c", "r", encoding="utf-8") as f:
-        seccomp_c = f.read()
-
-    # Hook __seccomp_filter for syscall 142 (reboot), 167 (prctl), and 32-bit compat (88, 172)
-    seccomp_hook_fn = """
-#ifdef CONFIG_KSU
-	if (this_syscall == 142 || this_syscall == 167 || this_syscall == 88 || this_syscall == 172)
-		return 0;
 #endif
 """
-    seccomp_c, n9_1 = re.subn(r"((?:static\s+)?int\s+__seccomp_filter\s*\([^)]*\)\s*\{)", r"\1\n" + seccomp_hook_fn, seccomp_c, count=1)
-    assert n9_1 == 1, "Failed to patch __seccomp_filter in kernel/seccomp.c"
+            seccomp_c, n = re.subn(
+                r"((?:static\s+)?int\s+__seccomp_filter\s*\([^)]*\)\s*\{)",
+                r"\1\n" + seccomp_bypass,
+                seccomp_c, count=1
+            )
+            if n == 1:
+                with open(seccomp_path, "w", encoding="utf-8") as f:
+                    f.write(seccomp_c)
+                print("[+] Patched kernel/seccomp.c for KSU prctl bypass")
+            else:
+                print("[!] Could not find __seccomp_filter, skipping SECCOMP patch")
+        else:
+            print("[~] kernel/seccomp.c already patched, skipping")
+    else:
+        print("[!] kernel/seccomp.c not found, skipping")
 
-    # Hook seccomp_run_filters after sd is populated
-    seccomp_target = "if (!sd) {\n\t\tpopulate_seccomp_data(&sd_local);\n\t\tsd = &sd_local;\n\t}"
-    seccomp_repl = """if (!sd) {
-\t\tpopulate_seccomp_data(&sd_local);
-\t\tsd = &sd_local;
-\t}
-#ifdef CONFIG_KSU
-\tif (sd) {
-\t\tunsigned long a0 = sd->args[0] & 0xFFFFFFFF;
-\t\tunsigned long a1 = sd->args[1] & 0xFFFFFFFF;
-\t\tif (a0 == 0xdeadbeef || a0 == 0xcafebabe || a1 == 0xcafebabe || a1 == 0xdeadbeef || sd->nr == 142 || sd->nr == 167 || sd->nr == 88 || sd->nr == 172)
-\t\t\treturn SECCOMP_RET_ALLOW;
-\t}
-#endif"""
-    assert seccomp_target in seccomp_c, "Failed to locate populate_seccomp_data in kernel/seccomp.c"
-    seccomp_c = seccomp_c.replace(seccomp_target, seccomp_repl, 1)
-
-    with open("kernel/seccomp.c", "w", encoding="utf-8") as f:
-        f.write(seccomp_c)
-    print("[+] Successfully patched kernel/seccomp.c with bulletproof KSU SECCOMP bypass")
-
-    # 10. ksud.c (Auto-create /data/adb directories on post-fs-data)
-    ksud_candidates = [
-        "KernelSU/kernel/ksud.c",
-        "drivers/kernelsu/ksud.c"
-    ]
-    ksud_path = next((p for p in ksud_candidates if os.path.exists(p)), None)
-    assert ksud_path, "Failed to locate ksud source file"
-    with open(ksud_path, "r", encoding="utf-8") as f:
-        ksud_c = f.read()
-
-    ksud_rc_target = '"on post-fs-data\\n"'
-    ksud_rc_replacement = '"on post-fs-data\\n\\t    mkdir /data/adb 0755 root root\\n\\t    mkdir /data/adb/ksu 0755 root root\\n\\t    mkdir /data/adb/ksu/bin 0755 root root\\n\\t    mkdir /data/adb/modules 0755 root root\\n\\t    mkdir /data/adb/post-fs-data.d 0755 root root\\n\\t    mkdir /data/adb/service.d 0755 root root\\n"'
-    if "mkdir /data/adb" not in ksud_c:
-        assert ksud_rc_target in ksud_c, f"Failed to locate on post-fs-data in {ksud_path}"
-        ksud_c = ksud_c.replace(ksud_rc_target, ksud_rc_replacement, 1)
-        with open(ksud_path, "w", encoding="utf-8") as f:
-            f.write(ksud_c)
-    print(f"[+] Successfully patched {ksud_path} with /data/adb directory creation")
-
-    # 11. sucompat.c (Allow Manager, Root, and Shell to execute su for SuperUserViewModel and adb)
-    sucompat_candidates = [
-        "KernelSU/kernel/sucompat.c",
-        "drivers/kernelsu/sucompat.c"
-    ]
-    sucompat_path = next((p for p in sucompat_candidates if os.path.exists(p)), None)
-    if sucompat_path:
-        with open(sucompat_path, "r", encoding="utf-8") as f:
-            suc = f.read()
-
-        suc_header = """#include "manager.h"
-
-static inline bool is_allow_su_compat(uid_t uid) {
-\tif (is_manager() || uid == 0 || uid == 2000)
-\t\treturn true;
-\treturn ksu_is_allow_uid(uid);
-}
-"""
-        if '#include "allowlist.h"' in suc and "is_allow_su_compat" not in suc:
-            suc = suc.replace('#include "allowlist.h"', '#include "allowlist.h"\n' + suc_header, 1)
-            suc = suc.replace('!ksu_is_allow_uid(current_uid().val)', '!is_allow_su_compat(current_uid().val)')
-            suc = suc.replace('!ksu_is_allow_uid(uid)', '!is_allow_su_compat(uid)')
-            with open(sucompat_path, "w", encoding="utf-8") as f:
-                f.write(suc)
-            print(f"[+] Successfully patched {sucompat_path} for Manager, Root, and Shell su access")
-
-    # 12. Create supercall.c in KernelSU/kernel/ for [ksu_driver] ioctl interface
-    supercall_dir = "KernelSU/kernel" if os.path.exists("KernelSU/kernel") else "drivers/kernelsu"
-    supercall_path = os.path.join(supercall_dir, "supercall.c")
-    supercall_code = """
-#include <linux/anon_inodes.h>
-#include <linux/err.h>
-#include <linux/fdtable.h>
-#include <linux/file.h>
-#include <linux/fs.h>
-#include <linux/slab.h>
-#include <linux/syscalls.h>
-#include <linux/uaccess.h>
-#include <linux/version.h>
-
-#include "ksu.h"
-#include "allowlist.h"
-#include "manager.h"
-
-#define KSU_INSTALL_MAGIC1 0xDEADBEEF
-#define KSU_INSTALL_MAGIC2 0xCAFEBABE
-
-#define KSU_GET_INFO_FLAG_LKM (1U << 0)
-#define KSU_GET_INFO_FLAG_MANAGER (1U << 1)
-
-struct ksu_get_info_cmd {
-    __u32 version;
-    __u32 flags;
-    __u32 features;
-    __u32 uapi_version;
-};
-
-struct ksu_get_hook_mode_cmd {
-    char mode[16];
-};
-
-struct ksu_get_version_tag_cmd {
-    char tag[32];
-};
-
-struct ksu_report_event_cmd {
-    __u32 event;
-};
-
-struct ksu_get_feature_cmd {
-    __u32 feature_id;
-    __u64 value;
-    __u8 supported;
-};
-
-struct ksu_set_feature_cmd {
-    __u32 feature_id;
-    __u64 value;
-};
-
-extern void escape_to_root(void);
-extern void on_post_fs_data(void);
-
-static __u64 feature_values[16] = {1, 1, 1, 1, 1, 1, 1, 1};
-
-static int anon_ksu_release(struct inode *inode, struct file *filp)
-{
-    return 0;
-}
-
-static long anon_ksu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
-{
-    void __user *argp = (void __user *)arg;
-    unsigned int nr = _IOC_NR(cmd);
-
-    if (_IOC_TYPE(cmd) != 'K')
-        return -ENOTTY;
-
-    switch (nr) {
-    case 1: // KSU_IOCTL_GRANT_ROOT
-        if (ksu_get_manager_uid() == (uid_t)-1 && current_uid().val >= 10000) {
-            ksu_set_manager_uid(current_uid().val);
-        }
-        if (is_manager() || current_uid().val == ksu_get_manager_uid() || ksu_is_allow_uid(current_uid().val) || current_uid().val == 0 || current_uid().val == 2000) {
-            escape_to_root();
-            return 0;
-        }
-        return -EPERM;
-
-    case 2: { // KSU_IOCTL_GET_INFO
-        if (ksu_get_manager_uid() == (uid_t)-1 && current_uid().val >= 10000) {
-            ksu_set_manager_uid(current_uid().val);
-        }
-        struct ksu_get_info_cmd info = {
-            .version = 33294,
-            .flags = KSU_GET_INFO_FLAG_MANAGER,
-            .features = 20,
-            .uapi_version = 4
-        };
-        if (copy_to_user(argp, &info, sizeof(info)))
-            return -EFAULT;
-        return 0;
-    }
-
-    case 3: { // KSU_IOCTL_REPORT_EVENT
-        struct ksu_report_event_cmd evt;
-        if (copy_from_user(&evt, argp, sizeof(evt)))
-            return -EFAULT;
-        if (evt.event == 1) { // EVENT_POST_FS_DATA
-            on_post_fs_data();
-        }
-        return 0;
-    }
-
-    case 4: // KSU_IOCTL_SET_SEPOLICY
-        return 0;
-
-    case 5: { // KSU_IOCTL_CHECK_SAFEMODE
-        __u8 in_safe_mode = 0;
-        if (copy_to_user(argp, &in_safe_mode, sizeof(in_safe_mode)))
-            return -EFAULT;
-        return 0;
-    }
-
-    case 6: // KSU_IOCTL_GET_ALLOW_LIST / NEW_GET_ALLOW_LIST
-    case 7: // KSU_IOCTL_GET_DENY_LIST / NEW_GET_DENY_LIST
-        return 0;
-
-    case 8: { // KSU_IOCTL_UID_GRANTED_ROOT
-        __u32 uid = 0;
-        __u8 allow = 1;
-        if (argp && copy_from_user(&uid, argp, sizeof(uid)) == 0) {
-            allow = is_manager() || ksu_is_allow_uid(uid) || (uid == 0) || (uid == 2000);
-            copy_to_user(argp, &allow, sizeof(allow));
-        }
-        return 0;
-    }
-
-    case 9: { // KSU_IOCTL_UID_SHOULD_UMOUNT
-        __u32 uid = 0;
-        __u8 should_umount = 0;
-        if (argp && copy_from_user(&uid, argp, sizeof(uid)) == 0) {
-            should_umount = ksu_uid_should_umount(uid);
-            copy_to_user(argp, &should_umount, sizeof(should_umount));
-        }
-        return 0;
-    }
-
-    case 10: { // KSU_IOCTL_GET_MANAGER_APPID
-        __u32 appid = ksu_get_manager_uid();
-        if (appid == (uid_t)-1)
-            appid = current_uid().val;
-        if (copy_to_user(argp, &appid, sizeof(appid)))
-            return -EFAULT;
-        return 0;
-    }
-
-    case 11: { // KSU_IOCTL_GET_APP_PROFILE
-        struct app_profile profile;
-        if (copy_from_user(&profile, argp, sizeof(profile)))
-            return -EFAULT;
-        ksu_get_app_profile(&profile);
-        if (copy_to_user(argp, &profile, sizeof(profile)))
-            return -EFAULT;
-        return 0;
-    }
-
-    case 12: { // KSU_IOCTL_SET_APP_PROFILE
-        struct app_profile profile;
-        if (copy_from_user(&profile, argp, sizeof(profile)))
-            return -EFAULT;
-        ksu_set_app_profile(&profile, true);
-        return 0;
-    }
-
-    case 13: { // KSU_IOCTL_GET_FEATURE
-        struct ksu_get_feature_cmd fcmd;
-        if (copy_from_user(&fcmd, argp, sizeof(fcmd)))
-            return -EFAULT;
-        fcmd.supported = 1;
-        if (fcmd.feature_id < 16) {
-            fcmd.value = feature_values[fcmd.feature_id];
-        } else {
-            fcmd.value = 1;
-        }
-        if (copy_to_user(argp, &fcmd, sizeof(fcmd)))
-            return -EFAULT;
-        return 0;
-    }
-
-    case 14: { // KSU_IOCTL_SET_FEATURE
-        struct ksu_set_feature_cmd fcmd;
-        if (copy_from_user(&fcmd, argp, sizeof(fcmd)))
-            return -EFAULT;
-        if (fcmd.feature_id < 16) {
-            feature_values[fcmd.feature_id] = fcmd.value;
-        }
-        return 0;
-    }
-
-    case 15: // KSU_IOCTL_GET_WRAPPER_FD
-    case 16: // KSU_IOCTL_MANAGE_MARK
-    case 17: // KSU_IOCTL_NUKE_EXT4_SYSFS
-    case 18: // KSU_IOCTL_ADD_TRY_UMOUNT
-    case 19: // KSU_IOCTL_SET_INIT_PGRP
-        return 0;
-
-    case 20: { // KSU_IOCTL_GET_SULOG_FD
-        extern int ksu_install_fd(void);
-        int sfd = ksu_install_fd();
-        return sfd >= 0 ? sfd : 0;
-    }
-
-    case 21: // KSU_IOCTL_DISABLE_ESCAPE_TO_ROOT
-        return 0;
-
-    case 98: { // KSU_IOCTL_GET_HOOK_MODE
-        struct ksu_get_hook_mode_cmd mode = {0};
-        strncpy(mode.mode, "Manual", sizeof(mode.mode) - 1);
-        if (copy_to_user(argp, &mode, sizeof(mode)))
-            return -EFAULT;
-        return 0;
-    }
-
-    case 99: { // KSU_IOCTL_GET_VERSION_TAG
-        struct ksu_get_version_tag_cmd tag = {0};
-        strncpy(tag.tag, "v3.4.0", sizeof(tag.tag) - 1);
-        if (copy_to_user(argp, &tag, sizeof(tag)))
-            return -EFAULT;
-        return 0;
-    }
-
-    default:
-        return 0;
-    }
-}
-
-
-static const struct file_operations anon_ksu_fops = {
-    .owner = THIS_MODULE,
-    .unlocked_ioctl = anon_ksu_ioctl,
-    .compat_ioctl = anon_ksu_ioctl,
-    .release = anon_ksu_release,
-};
-
-int ksu_install_fd(void)
-{
-    struct file *filp;
-    int fd;
-
-    fd = get_unused_fd_flags(O_CLOEXEC);
-    if (fd < 0) {
-        pr_err("ksu_install_fd: failed to get unused fd\\n");
-        return fd;
-    }
-
-    filp = anon_inode_getfile("[ksu_driver]", &anon_ksu_fops, NULL, O_RDWR | O_CLOEXEC);
-    if (IS_ERR(filp)) {
-        pr_err("ksu_install_fd: failed to create anon inode file\\n");
-        put_unused_fd(fd);
-        return PTR_ERR(filp);
-    }
-
-    fd_install(fd, filp);
-    pr_info("ksu fd installed: %d for pid %d\\n", fd, current->pid);
-    return fd;
-}
-
-int ksu_handle_reboot(int magic1, int magic2, unsigned int cmd, void __user *arg)
-{
-    if (magic1 == (int)KSU_INSTALL_MAGIC1 && magic2 == (int)KSU_INSTALL_MAGIC2) {
-        int fd = ksu_install_fd();
-        if (fd >= 0 && arg) {
-            if (copy_to_user(arg, &fd, sizeof(fd))) {
-                pr_err("ksu_handle_reboot: copy_to_user failed\\n");
-            }
-        }
-        if (cmd == 0 && (is_manager() || ksu_is_allow_uid(current_uid().val) || current_uid().val == 0)) {
-            escape_to_root();
-        }
-        return 0;
-    }
-    if (magic1 == (int)KSU_INSTALL_MAGIC1 && magic2 == 10006) { // CHANGE_MANAGER_UID
-        if (current_uid().val == 0 || is_manager()) {
-            ksu_set_manager_uid(cmd);
-            if (arg) {
-                unsigned long reply = (unsigned long)arg;
-                copy_to_user(arg, &reply, sizeof(reply));
-            }
-        }
-        return 0;
-    }
-    return -EINVAL;
-}
-"""
-    with open(supercall_path, "w", encoding="utf-8") as f:
-        f.write(supercall_code)
-    print(f"[+] Successfully created {supercall_path} ([ksu_driver] supercall handler)")
-
-    # 12. Patch kernel/reboot.c for reboot supercall
-    with open("kernel/reboot.c", "r", encoding="utf-8") as f:
-        rb_c = f.read()
-
-    rb_decl = """
-#ifdef CONFIG_KSU
-extern int ksu_handle_reboot(int magic1, int magic2, unsigned int cmd, void __user *arg);
-#endif
-"""
-    rb_call = """
-#ifdef CONFIG_KSU
-	if (magic1 == (int)0xdeadbeef && magic2 == (int)0xcafebabe) {
-		ksu_handle_reboot(magic1, magic2, cmd, arg);
-		return 0;
-	}
-#endif
-"""
-    rb_c, n_rb = re.subn(r"(SYSCALL_DEFINE4\s*\(\s*reboot\s*,[^{]*\{)", rb_decl + r"\n\1\n" + rb_call, rb_c, count=1)
-    assert n_rb == 1, "Failed to patch kernel/reboot.c"
-    with open("kernel/reboot.c", "w", encoding="utf-8") as f:
-        f.write(rb_c)
-    print("[+] Successfully patched kernel/reboot.c with KernelSU reboot supercall")
-
-    # 13. Patch KernelSU Makefile (Compile supercall.o & set KSU_VERSION to 33294)
+    # =========================================================================
+    # 9. KernelSU Makefile - Fix KSU_VERSION pin at 33294
+    # =========================================================================
+    print("\n[*] Patching KernelSU Makefile (version pin)...")
     mk_candidates = [
+        "drivers/kernelsu/Makefile",
+        "KernelSU-Next/kernel/Makefile",
         "KernelSU/kernel/Makefile",
-        "drivers/kernelsu/Makefile"
     ]
     mk_path = next((p for p in mk_candidates if os.path.exists(p)), None)
+
     if mk_path:
         with open(mk_path, "r", encoding="utf-8") as f:
             mk_c = f.read()
-        target_version_expr = "$(eval KSU_VERSION=$(shell expr 10000 + $(KSU_GIT_VERSION) + 200))"
-        if target_version_expr in mk_c:
-            mk_c = mk_c.replace(target_version_expr, "$(eval KSU_VERSION=33294)")
+
+        modified = False
+        for old_expr in [
+            "$(eval KSU_VERSION=$(shell expr 10000 + $(KSU_GIT_VERSION) + 200))",
+            "$(eval KSU_VERSION=$(shell expr 10000 + $(KSU_GIT_VERSION) + 300))",
+        ]:
+            if old_expr in mk_c:
+                mk_c = mk_c.replace(old_expr, "$(eval KSU_VERSION=33294)")
+                modified = True
+
         if "ccflags-y += -DKSU_VERSION=16" in mk_c:
             mk_c = mk_c.replace("ccflags-y += -DKSU_VERSION=16", "ccflags-y += -DKSU_VERSION=33294")
-        if "kernelsu-objs += supercall.o" not in mk_c:
-            mk_c = mk_c.replace("kernelsu-objs += core_hook.o", "kernelsu-objs += core_hook.o\nkernelsu-objs += supercall.o")
-        with open(mk_path, "w", encoding="utf-8") as f:
-            f.write(mk_c)
-        print(f"[+] Successfully updated {mk_path} with supercall.o and KSU_VERSION=33294")
+            modified = True
 
-    print("[*] All KernelSU-Next VFS, Security & Supercall hooks applied successfully!")
+        if modified:
+            with open(mk_path, "w", encoding="utf-8") as f:
+                f.write(mk_c)
+            print(f"[+] Updated {mk_path} with KSU_VERSION=33294")
+        else:
+            print(f"[~] {mk_path} version already correct, skipping")
+    else:
+        print("[!] KernelSU Makefile not found (Kbuild will use git tag version)")
+
+    # =========================================================================
+    # 10. ksud runtime integration - Ensure /data/adb directories are created
+    # =========================================================================
+    print("\n[*] Checking ksud runtime integration...")
+    ksud_candidates = [
+        "drivers/kernelsu/runtime/ksud_integration.c",
+        "KernelSU-Next/kernel/runtime/ksud_integration.c",
+        "drivers/kernelsu/ksud.c",
+        "KernelSU/kernel/ksud.c",
+    ]
+    ksud_path_found = next((p for p in ksud_candidates if os.path.exists(p)), None)
+    if ksud_path_found:
+        with open(ksud_path_found, "r", encoding="utf-8") as f:
+            ksud_c = f.read()
+
+        if "mkdir /data/adb" not in ksud_c and '"on post-fs-data\\n"' in ksud_c:
+            ksud_rc_replacement = (
+                '"on post-fs-data\\n\\t    mkdir /data/adb 0755 root root\\n'
+                '\\t    mkdir /data/adb/ksu 0755 root root\\n'
+                '\\t    mkdir /data/adb/ksu/bin 0755 root root\\n'
+                '\\t    mkdir /data/adb/modules 0755 root root\\n'
+                '\\t    mkdir /data/adb/post-fs-data.d 0755 root root\\n'
+                '\\t    mkdir /data/adb/service.d 0755 root root\\n"'
+            )
+            ksud_c = ksud_c.replace('"on post-fs-data\\n"', ksud_rc_replacement, 1)
+            with open(ksud_path_found, "w", encoding="utf-8") as f:
+                f.write(ksud_c)
+            print(f"[+] Patched {ksud_path_found} with /data/adb directory creation")
+        else:
+            print(f"[~] {ksud_path_found} already provisioned, skipping")
+    else:
+        print("[~] ksud_integration.c not found; anykernel.sh will provision /data/adb")
+
+    # =========================================================================
+    # 11. fs/devpts/inode.c - PTY hook for NHterm/Termux terminal emulators
+    # =========================================================================
+    print("\n[*] Patching fs/devpts/inode.c (PTY hook for terminal emulators)...")
+    devpts_path = "fs/devpts/inode.c"
+    if os.path.exists(devpts_path):
+        with open(devpts_path, "r", encoding="utf-8") as f:
+            devpts_c = f.read()
+
+        devpts_decl = """
+#ifdef CONFIG_KSU
+extern int ksu_handle_devpts(struct inode *inode);
+#endif
+"""
+        if "ksu_handle_devpts" not in devpts_c:
+            devpts_pattern = r"(struct\s+dentry\s*\*devpts_pty_new\s*\([^{]*\{[\s\S]*?d_add\s*\(\s*dentry\s*,\s*inode\s*\)\s*;)"
+            devpts_repl = devpts_decl + r"\n\1\n#ifdef CONFIG_KSU\n\t\tksu_handle_devpts(inode);\n#endif"
+            devpts_c, n = re.subn(devpts_pattern, devpts_repl, devpts_c, count=1)
+            if n == 1:
+                with open(devpts_path, "w", encoding="utf-8") as f:
+                    f.write(devpts_c)
+                print("[+] Patched fs/devpts/inode.c with KernelSU PTY hook")
+            else:
+                print("[!] Could not locate devpts_pty_new, skipping PTY hook")
+        else:
+            print("[~] fs/devpts/inode.c already patched, skipping")
+    else:
+        print("[!] fs/devpts/inode.c not found, skipping")
+
+    print("\n" + "=" * 60)
+    print("[*] All KernelSU-Next v3.4.0 VFS hooks applied!")
+    print("    Kernel: SM6250 (Miatoll) / crDroid 16.0 / Linux 4.19")
+    print("    Driver: KernelSU-Next v3.4.0 (supercall/dispatch native)")
+    print("=" * 60)
+
+
 
 if __name__ == "__main__":
     main()

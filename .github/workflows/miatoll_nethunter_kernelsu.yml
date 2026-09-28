@@ -58,10 +58,13 @@ jobs:
           cd android-kernel/scripts
           sed -i 's/ -dirty//g' setlocalversion
 
-      - name: Setup KernelSU Core Driver
+      - name: Setup KernelSU-Next Core Driver
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.9.5
+          # Use KernelSU-Next's own setup.sh (NOT tiann/KernelSU) to get UAPI v4 support
+          # required by the Manager's grant-root handshake (CMD_GRANT_ROOT)
+          curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s v3.4.0
+          echo "[+] KernelSU-Next v3.4.0 driver source integrated successfully"
 
       - name: Apply KernelSU-Next VFS Hooks and Version 33294 Compatibility
         run: |
@@ -231,10 +234,15 @@ jobs:
           # Copiar el archivo estático de configuración anykernel.sh del repositorio
           cp $GITHUB_WORKSPACE/.github/anykernel/anykernel.sh AnyKernel3/anykernel.sh
 
-          # Descargar binario oficial de ksud de KernelSU-Next para aarch64 (v3.4.0 / UAPI 4)
-          echo "[+] Descargando binario oficial ksud de KernelSU-Next v3.4.0..."
-          curl -LSs "https://github.com/KernelSU-Next/KernelSU-Next/releases/download/v3.4.0/ksud-aarch64-linux-android" -o AnyKernel3/tools/ksud
+          # Descargar binario oficial de ksud de KernelSU-Next para aarch64 (v3.4.0 / UAPI 4 / SIGSYS handler)
+          echo "[+] Descargando binario oficial ksud de KernelSU-Next v3.4.0 (con SIGSYS handler y fd wrapper fix)..."
+          curl -LSs --retry 5 --retry-delay 3 \
+            "https://github.com/KernelSU-Next/KernelSU-Next/releases/download/v3.4.0/ksud-aarch64-linux-android" \
+            -o AnyKernel3/tools/ksud
           chmod 755 AnyKernel3/tools/ksud
+          # Verificar que el binario descargó correctamente
+          ls -lh AnyKernel3/tools/ksud
+          file AnyKernel3/tools/ksud || true
 
           echo "=== VERIFICACIÓN DE ESTRUCTURA ANYKERNEL3 ==="
           ls -la AnyKernel3/
