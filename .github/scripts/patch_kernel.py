@@ -392,13 +392,19 @@ static long anon_ksu_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
 
     switch (nr) {
     case 1: // KSU_IOCTL_GRANT_ROOT
-        if (is_manager() || ksu_is_allow_uid(current_uid().val) || current_uid().val == 0 || current_uid().val == 2000) {
+        if (ksu_get_manager_uid() == (uid_t)-1 && current_uid().val >= 10000) {
+            ksu_set_manager_uid(current_uid().val);
+        }
+        if (is_manager() || current_uid().val == ksu_get_manager_uid() || ksu_is_allow_uid(current_uid().val) || current_uid().val == 0 || current_uid().val == 2000) {
             escape_to_root();
             return 0;
         }
         return -EPERM;
 
     case 2: { // KSU_IOCTL_GET_INFO
+        if (ksu_get_manager_uid() == (uid_t)-1 && current_uid().val >= 10000) {
+            ksu_set_manager_uid(current_uid().val);
+        }
         struct ksu_get_info_cmd info = {
             .version = 33294,
             .flags = KSU_GET_INFO_FLAG_MANAGER,
