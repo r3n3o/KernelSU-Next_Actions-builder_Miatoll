@@ -1,16 +1,19 @@
-﻿"""
-KernelSU-Next v3.4.0 - Non-GKI VFS Hook Injector for SM6250 (Miatoll / Linux 4.19)
-====================================================================================
-Purpose: Inject the VFS call hooks required for KernelSU-Next's manual (non-kprobes)
-         integration mode into the crDroid 16.0 kernel source tree.
+"""
+KernelSU-Next v3.4.0-legacy - Non-GKI VFS Hook Injector for SM6250 (Miatoll / Linux 4.19)
+============================================================================================
+Purpose: Inject the VFS call hooks required for KernelSU-Next's NON-GKI (legacy) integration
+         mode into the crDroid 16.0 kernel source tree.
 
-KernelSU-Next v3.4.0 Architecture Notes:
-  - Core driver lives in kernel/ (symlinked as drivers/kernelsu by setup.sh)
-  - For GKI kernels: Uses LSM hooks + syscall tracepoints (NO manual VFS hooks needed)
-  - For non-GKI kernels (SM6250/4.19): Must inject manual VFS hooks into kernel source
-  - The supercall (prctl magic) is in supercall/dispatch.c natively
-  - apk_sign.c is in manager/apk_sign.c (not at root like KernelSU v0.9.5)
-  - NO manual core_hook.c patching needed (does not exist in v3.4.0 structure)
+KernelSU-Next v3.4.0-legacy Architecture (Non-GKI):
+  - Uses MANUAL VFS hooks (NOT kprobes/tracepoints)
+  - core_hook.c EXISTS and handles prctl supercall entry
+  - apk_sign.c is at drivers/kernelsu/apk_sign.c (flat structure)
+  - setup.sh tag: v3.4.0-legacy (NOT v3.4.0 which is GKI-only)
+
+KernelSU-Next v3.4.0 (GKI-only, for reference):
+  - Uses LSM hooks + syscall tracepoints
+  - core_hook.c does NOT exist
+  - supercall/dispatch.c handles prctl
 
 Author: r3n3o & Antigravity (Google DeepMind)
 """
@@ -207,17 +210,68 @@ extern int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
         print("[~] kernel/sys.c already patched, skipping")
 
     # =========================================================================
-    # 6. manager/apk_sign.c - Authorize KernelSU-Next Manager APK signature
-    #    In v3.4.0, this file is at manager/apk_sign.c (not root apk_sign.c)
+    # 6. core_hook.c - SECCOMP atomic clear + Manager detection fix
+    #    In v3.4.0-LEGACY, core_hook.c EXISTS and handles the prctl entry.
+    #    Two critical fixes needed:
+    #    a) SECCOMP atomic clear: replace invalid flag access with safe API
+    #    b) Grant-root: ensure ksu_get_manager_uid() check is lenient enough
     # =========================================================================
-    print("\n[*] Patching manager/apk_sign.c (Manager APK authorization)...")
+    print("\n[*] Patching core_hook.c (SECCOMP clear + grant-root fix)...")
+    core_candidates = [
+        "drivers/kernelsu/core_hook.c",
+        "KernelSU-Next/kernel/core_hook.c",
+        "KernelSU/kernel/core_hook.c",
+    ]
+    core_path = next((p for p in core_candidates if os.path.exists(p)), None)
+    if core_path:
+        with open(core_path, "r", encoding="utf-8") as f:
+            core_c = f.read()
+
+        modified = False
+
+        # Fix a) SECCOMP atomic clear — replace raw flag manipulation with safe kernel API
+        # (current_thread_info()->flags &= ~TIF_SECCOMP is not atomic-safe on SMP)
+        bad_seccomp = "current_thread_info()->flags &= ~(TIF_SECCOMP | _TIF_SECCOMP);"
+        good_seccomp = "clear_tsk_thread_flag(current, TIF_SECCOMP);"
+        if bad_seccomp in core_c:
+            core_c = core_c.replace(bad_seccomp, good_seccomp)
+            modified = True
+            print(f"[+] Fixed SECCOMP atomic clear in {core_path}")
+
+        # Fix b) Broaden Manager detection: if UID >= 10000 auto-set as manager candidate
+        # This ensures the first prctl(0xdeadbeef) from the Manager app is accepted
+        manager_check_old = "if (ksu_get_manager_uid() == current_uid().val) {"
+        manager_check_new = (
+            "if (ksu_get_manager_uid() == current_uid().val || "
+            "(ksu_get_manager_uid() == (uid_t)-1 && current_uid().val >= 10000)) {"
+        )
+        if manager_check_old in core_c and manager_check_new not in core_c:
+            core_c = core_c.replace(manager_check_old, manager_check_new, 1)
+            modified = True
+            print(f"[+] Broadened Manager UID check in {core_path}")
+
+        if modified:
+            with open(core_path, "w", encoding="utf-8") as f:
+                f.write(core_c)
+        else:
+            print(f"[~] {core_path} already patched or patterns not found, skipping")
+    else:
+        print("[~] core_hook.c not found (expected in v3.4.0-legacy; check setup.sh ran correctly)")
+
+    # =========================================================================
+    # 7. apk_sign.c - Authorize KernelSU-Next Manager APK signature
+    #    In v3.4.0-LEGACY: flat structure -> drivers/kernelsu/apk_sign.c
+    #    In v3.4.0 (GKI): manager/apk_sign.c
+    # =========================================================================
+    print("\n[*] Patching apk_sign.c (Manager APK authorization)...")
     apk_candidates = [
-        "drivers/kernelsu/manager/apk_sign.c",
-        "KernelSU-Next/kernel/manager/apk_sign.c",
-        "KernelSU/kernel/apk_sign.c",
-        "drivers/kernelsu/apk_sign.c",
+        "drivers/kernelsu/apk_sign.c",       # v3.4.0-legacy (flat)
+        "KernelSU-Next/kernel/apk_sign.c",   # direct clone legacy
+        "drivers/kernelsu/manager/apk_sign.c", # v3.4.0 GKI (fallback)
+        "KernelSU/kernel/apk_sign.c",        # older structure
     ]
     apk_path = next((p for p in apk_candidates if os.path.exists(p)), None)
+
 
     if apk_path:
         with open(apk_path, "r", encoding="utf-8") as f:
