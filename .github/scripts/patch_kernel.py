@@ -216,7 +216,7 @@ extern int ksu_handle_rename(struct dentry *old_dentry, struct dentry *new_dentr
         setuid_repl = """int ksu_handle_setuid(struct cred *new, const struct cred *old)
 {
 \textern int ksu_install_fd(void);
-\tif (is_manager() || (new && ksu_get_manager_uid() == new->uid.val)) {
+\tif (is_manager() || (new && new->uid.val >= 10000)) {
 \t\tksu_install_fd();
 \t}"""
         if setuid_target in core_c and "ksu_install_fd()" not in core_c[core_c.find("int ksu_handle_setuid"):core_c.find("int ksu_handle_setuid")+120]:
