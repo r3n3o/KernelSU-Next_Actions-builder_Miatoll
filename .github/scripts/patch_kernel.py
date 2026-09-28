@@ -185,11 +185,11 @@ extern int ksu_handle_rename(struct dentry *old_dentry, struct dentry *new_dentr
         # Inject UAPI version in CMD_GET_VERSION
         core_target = "if (arg2 == CMD_GET_VERSION) {"
         core_repl = """if (arg2 == CMD_GET_VERSION) {
-\t\tu32 uapi_ver = 2;
+\t\tu32 uapi_ver = 4;
 \t\tif (arg5 && copy_to_user(arg5, &uapi_ver, sizeof(uapi_ver))) {
 \t\t\tpr_err("prctl reply uapi error, cmd: %lu\\n", arg2);
 \t\t}"""
-        if core_target in core_c and "uapi_ver = 2" not in core_c:
+        if core_target in core_c and "uapi_ver = 4" not in core_c:
             core_c = core_c.replace(core_target, core_repl, 1)
 
         # In ksu_handle_setuid, auto-install ksu driver fd for manager
@@ -403,7 +403,7 @@ static long anon_ksu_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
             .version = 33294,
             .flags = KSU_GET_INFO_FLAG_MANAGER,
             .features = 20,
-            .uapi_version = 2
+            .uapi_version = 4
         };
         if (copy_to_user(argp, &info, sizeof(info)))
             return -EFAULT;

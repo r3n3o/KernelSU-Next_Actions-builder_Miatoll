@@ -231,9 +231,9 @@ jobs:
           # Copiar el archivo estático de configuración anykernel.sh del repositorio
           cp $GITHUB_WORKSPACE/.github/anykernel/anykernel.sh AnyKernel3/anykernel.sh
 
-          # Descargar binario oficial de ksud de KernelSU-Next para aarch64
-          echo "[+] Descargando binario oficial ksud de KernelSU-Next..."
-          curl -LSs "https://github.com/KernelSU-Next/KernelSU-Next/releases/download/v3.3.0/ksud-aarch64-linux-android" -o AnyKernel3/tools/ksud
+          # Descargar binario oficial de ksud de KernelSU-Next para aarch64 (v3.4.0 / UAPI 4)
+          echo "[+] Descargando binario oficial ksud de KernelSU-Next v3.4.0..."
+          curl -LSs "https://github.com/KernelSU-Next/KernelSU-Next/releases/download/v3.4.0/ksud-aarch64-linux-android" -o AnyKernel3/tools/ksud
           chmod 755 AnyKernel3/tools/ksud
 
           echo "=== VERIFICACIÓN DE ESTRUCTURA ANYKERNEL3 ==="
