@@ -171,7 +171,7 @@ extern int ksu_handle_rename(struct dentry *old_dentry, struct dentry *new_dentr
         f.write(namei_c)
     print("[+] Successfully patched fs/namei.c with KernelSU rename hook")
 
-    # 8. core_hook.c (ARM64 SECCOMP atomic clear, UAPI v2 reporting, and manager registration)
+    # 8. core_hook.c (ARM64 SECCOMP atomic clear, UAPI v4 reporting, and universal manager prctl entry)
     core_candidates = [
         "KernelSU/kernel/core_hook.c",
         "drivers/kernelsu/core_hook.c"
@@ -181,16 +181,6 @@ extern int ksu_handle_rename(struct dentry *old_dentry, struct dentry *new_dentr
         with open(core_path, "r", encoding="utf-8") as f:
             core_c = f.read()
         core_c = core_c.replace("current_thread_info()->flags &= ~(TIF_SECCOMP | _TIF_SECCOMP);", "clear_tsk_thread_flag(current, TIF_SECCOMP);")
-        
-        # Inject UAPI version in CMD_GET_VERSION
-        core_target = "if (arg2 == CMD_GET_VERSION) {"
-        core_repl = """if (arg2 == CMD_GET_VERSION) {
-\t\tu32 uapi_ver = 4;
-\t\tif (arg5 && copy_to_user(arg5, &uapi_ver, sizeof(uapi_ver))) {
-\t\t\tpr_err("prctl reply uapi error, cmd: %lu\\n", arg2);
-\t\t}"""
-        if core_target in core_c and "uapi_ver = 4" not in core_c:
-            core_c = core_c.replace(core_target, core_repl, 1)
 
         # In ksu_handle_setuid, auto-install ksu driver fd for manager
         setuid_target = "int ksu_handle_setuid(struct cred *new, const struct cred *old)\n{"
@@ -203,40 +193,63 @@ extern int ksu_handle_rename(struct dentry *old_dentry, struct dentry *new_dentr
         if setuid_target in core_c and "ksu_install_fd()" not in core_c[core_c.find("int ksu_handle_setuid"):core_c.find("int ksu_handle_setuid")+120]:
             core_c = core_c.replace(setuid_target, setuid_repl, 1)
 
-        # Allow become_manager before from_manager gate and register manager UID
-        auth_target = """\tbool from_root = 0 == current_uid().val;
-\tbool from_manager = is_manager();
-
-\tif (!from_root && !from_manager) {"""
-        auth_repl = """\tif (arg2 == CMD_BECOME_MANAGER) {
-\t\tksu_set_manager_uid(current_uid().val);
+        # Inject universal prctl dispatch at the very entry of ksu_handle_prctl
+        prctl_entry_target = "if (option != 0xdeadbeef) {\n\t\treturn 0;\n\t}"
+        prctl_entry_repl = """if (option != 0xdeadbeef) {
+\t\treturn 0;
 \t}
 
-\tbool from_root = 0 == current_uid().val;
-\tbool from_manager = is_manager();
-
-\tif (!from_root && !from_manager) {"""
-        if auth_target in core_c:
-            core_c = core_c.replace(auth_target, auth_repl, 1)
-
-        # Inject become_manager override to install driver fd and reply OK
-        mgr_target = "if (arg2 == CMD_BECOME_MANAGER) {"
-        mgr_repl = """if (arg2 == CMD_BECOME_MANAGER) {
 \textern int ksu_install_fd(void);
-\tksu_set_manager_uid(current_uid().val);
-\tksu_install_fd();
-\tif (copy_to_user(result, &reply_ok, sizeof(reply_ok))) {
-\t\tpr_err("become_manager: prctl reply error\\n");
+
+\tif (arg2 == CMD_GET_VERSION) {
+\t\tu32 version = 33294;
+\t\tu32 uapi_ver = 4;
+\t\tu32 reply_ok = 0xDEADBEEF;
+\t\tif (ksu_get_manager_uid() == (uid_t)-1 && current_uid().val >= 10000) {
+\t\t\tksu_set_manager_uid(current_uid().val);
+\t\t}
+\t\tksu_install_fd();
+\t\tif (arg3 && copy_to_user((void __user *)arg3, &reply_ok, sizeof(reply_ok))) {
+\t\t\tpr_err("prctl reply ok error\\n");
+\t\t}
+\t\tif (arg4 && copy_to_user((void __user *)arg4, &version, sizeof(version))) {
+\t\t\tpr_err("prctl reply version error\\n");
+\t\t}
+\t\tif (arg5 && copy_to_user((void __user *)arg5, &uapi_ver, sizeof(uapi_ver))) {
+\t\t\tpr_err("prctl reply uapi error\\n");
+\t\t}
+\t\treturn 0;
 \t}
-\treturn 0;
-}
-\tif (false) {"""
-        if mgr_target in core_c and "ksu_install_fd" not in core_c:
-            core_c = core_c.replace(mgr_target, mgr_repl, 1)
-            
+
+\tif (arg2 == CMD_BECOME_MANAGER) {
+\t\tu32 reply_ok = 0xDEADBEEF;
+\t\tksu_set_manager_uid(current_uid().val);
+\t\tksu_install_fd();
+\t\tif (arg3 && copy_to_user((void __user *)arg3, &reply_ok, sizeof(reply_ok))) {
+\t\t\tpr_err("become_manager: prctl reply error\\n");
+\t\t}
+\t\treturn 0;
+\t}
+
+\tif (arg2 == CMD_GRANT_ROOT) {
+\t\tif (ksu_get_manager_uid() == (uid_t)-1 && current_uid().val >= 10000) {
+\t\t\tksu_set_manager_uid(current_uid().val);
+\t\t}
+\t\tif (is_manager() || current_uid().val == ksu_get_manager_uid() || ksu_is_allow_uid(current_uid().val) || current_uid().val == 0 || current_uid().val == 2000) {
+\t\t\tescape_to_root();
+\t\t\tu32 reply_ok = 0xDEADBEEF;
+\t\t\tif (arg3 && copy_to_user((void __user *)arg3, &reply_ok, sizeof(reply_ok))) {
+\t\t\t\tpr_err("grant_root: prctl reply error\\n");
+\t\t\t}
+\t\t\treturn 0;
+\t\t}
+\t}"""
+        if prctl_entry_target in core_c and "uapi_ver = 4" not in core_c:
+            core_c = core_c.replace(prctl_entry_target, prctl_entry_repl, 1)
+
         with open(core_path, "w", encoding="utf-8") as f:
             f.write(core_c)
-        print(f"[+] Successfully patched {core_path} for SECCOMP clearing, UAPI v2 reporting, and manager registration")
+        print(f"[+] Successfully patched {core_path} for SECCOMP clearing, UAPI v4 reporting, and universal manager prctl entry")
 
     # 9. kernel/seccomp.c (Allow KSU prctl and reboot supercalls past Android SECCOMP filter without SIGSYS trap)
     with open("kernel/seccomp.c", "r", encoding="utf-8") as f:
