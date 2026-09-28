@@ -174,6 +174,8 @@ extern int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
 
     apk_c, n6 = re.subn(r"(bool\s+is_manager_apk\s*\([^)]*\)\s*\{)([^}]*)(\})", r"\1\n\treturn true;\n\3", apk_c, count=1)
     assert n6 == 1, f"Failed to patch is_manager_apk in {apk_path}"
+    apk_c = re.sub(r'#define\s+EXPECTED_SIZE\s+0x[0-9a-fA-F]+', '#define EXPECTED_SIZE 0x3e6', apk_c)
+    apk_c = re.sub(r'#define\s+EXPECTED_HASH\s+"[0-9a-fA-F]+"', '#define EXPECTED_HASH "79e590113c4c4c0c222978e413a5faa801666957b1212a328e46c00c69821bf7"', apk_c)
     with open(apk_path, "w", encoding="utf-8") as f:
         f.write(apk_c)
     print(f"[+] Successfully patched {apk_path} to authorize KernelSU-Next Manager")
@@ -231,19 +233,18 @@ extern int ksu_handle_rename(struct dentry *old_dentry, struct dentry *new_dentr
 \tif (arg2 == CMD_GET_VERSION) {
 \t\tu32 version = 33294;
 \t\tu32 uapi_ver = 4;
-\t\tu32 reply_ok = 0xDEADBEEF;
 \t\tif (ksu_get_manager_uid() == (uid_t)-1 && current_uid().val >= 10000) {
 \t\t\tksu_set_manager_uid(current_uid().val);
 \t\t}
 \t\tksu_install_fd();
-\t\tif (arg3 && copy_to_user((void __user *)arg3, &reply_ok, sizeof(reply_ok))) {
-\t\t\tpr_err("prctl reply ok error\\n");
-\t\t}
-\t\tif (arg4 && copy_to_user((void __user *)arg4, &version, sizeof(version))) {
+\t\tif (arg3 && copy_to_user((void __user *)arg3, &version, sizeof(version))) {
 \t\t\tpr_err("prctl reply version error\\n");
 \t\t}
-\t\tif (arg5 && copy_to_user((void __user *)arg5, &uapi_ver, sizeof(uapi_ver))) {
+\t\tif (arg4 && copy_to_user((void __user *)arg4, &uapi_ver, sizeof(uapi_ver))) {
 \t\t\tpr_err("prctl reply uapi error\\n");
+\t\t}
+\t\tif (arg5 && copy_to_user((void __user *)arg5, &uapi_ver, sizeof(uapi_ver))) {
+\t\t\tpr_err("prctl reply uapi5 error\\n");
 \t\t}
 \t\treturn 0;
 \t}

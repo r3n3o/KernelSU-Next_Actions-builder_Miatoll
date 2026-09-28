@@ -71,7 +71,8 @@ mount /data 2>/dev/null;
 if [ -d /data ]; then
   ui_print "[+] Provisioning KernelSU-Next v3.4.0 daemon environment...";
   mkdir -p /data/adb /data/adb/modules /data/adb/ksu /data/adb/ksu/bin /data/adb/post-fs-data.d /data/adb/service.d 2>/dev/null;
-  chmod 755 /data/adb /data/adb/modules /data/adb/ksu /data/adb/ksu/bin 2>/dev/null;
+  chmod 755 /data/adb /data/adb/modules /data/adb/ksu /data/adb/ksu/bin /data/adb/post-fs-data.d /data/adb/service.d 2>/dev/null;
+  chmod -R 755 /data/adb/ksu 2>/dev/null;
   if [ -f $AKHOME/tools/ksud ]; then
     cp -f $AKHOME/tools/ksud /data/adb/ksud 2>/dev/null;
     cp -f $AKHOME/tools/ksud /data/adb/ksu/bin/ksud 2>/dev/null;
