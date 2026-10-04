@@ -148,7 +148,7 @@ extern int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
     apk_c = "#include <linux/string.h>\n" + apk_c
     apk_c, n6 = re.subn(
         r"(bool\s+is_manager_apk\s*\([^)]*\)\s*\{)",
-        r"\1\n\tstruct dentry *dentry = file->f_path.dentry;\n\tif (dentry && dentry->d_parent && dentry->d_parent->d_name.name) {\n\t\tif (strstr((const char *)dentry->d_parent->d_name.name, \"com.rifsxd.ksunext\")) {\n\t\t\treturn true;\n\t\t}\n\t}\n",
+        r'\1\n\tif (path && strstr((const char *)path, "com.rifsxd.ksunext")) {\n\t\treturn true;\n\t}\n',
         apk_c, count=1)
     assert n6 == 1, f"Failed to patch is_manager_apk in {apk_path}"
     with open(apk_path, "w", encoding="utf-8") as f:
