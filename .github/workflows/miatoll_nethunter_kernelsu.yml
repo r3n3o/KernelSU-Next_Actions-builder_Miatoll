@@ -34,7 +34,7 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace
           
-          # Descargar Clang 19 r530567 mediante sparse-checkout para evitar cierres de conexiÃ³n HTTP (EOF)
+          # Descargar Clang 19 r530567 mediante sparse-checkout para evitar cierres de conexión HTTP (EOF)
           echo "[+] Descargando AOSP Clang 19 (r530567) con Git sparse-checkout..."
           git clone --filter=blob:none --no-checkout --depth=1 https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 -b main clang_repo
           cd clang_repo
@@ -58,29 +58,22 @@ jobs:
           cd android-kernel/scripts
           sed -i 's/ -dirty//g' setlocalversion
 
-      - name: Setup KernelSU-Next Core Driver (Non-GKI Legacy)
+      - name: Setup KernelSU Core Driver
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-          # CRITICAL: Use v3.4.0-LEGACY for Non-GKI kernels (SM6250 / Linux 4.19)
-          # v3.4.0 (no suffix) = GKI only (kprobes/tracepoints, NO core_hook.c)
-          # v3.4.0-legacy = Non-GKI (manual VFS hooks via core_hook.c) <- THIS ONE
-          curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s v3.4.0-legacy
-          echo "[+] KernelSU-Next v3.4.0-legacy driver integrated (Non-GKI / manual VFS hooks)"
-
-          # Note: v3.4.0-legacy uses manual VFS hooks but has removed core_hook.c,
-          # now it uses supercall/supercall.c and hooks sys_reboot instead of prctl.
-          echo "=== Setup Completado ==="
+          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.9.5
 
       - name: Apply KernelSU-Next VFS Hooks and Version 33294 Compatibility
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
           python3 $GITHUB_WORKSPACE/.github/scripts/patch_kernel.py
-          echo "=== VERIFICACIÃ“N DE PARCHES VFS & KERNELSU-NEXT ==="
+          echo "=== VERIFICACIÓN DE PARCHES VFS & KERNELSU-NEXT ==="
           git diff fs/ kernel/
-          [ -d drivers/kernelsu ] && ls drivers/kernelsu/ || true
-          echo "==========================================="
+          [ -d KernelSU ] && cd KernelSU && git diff && cd .. || true
+          [ -d drivers/kernelsu ] && cd drivers/kernelsu && git diff && cd .. || true
+          echo "=================================================="
 
-      # Etapa de InyecciÃ³n de NetHunter Core manteniendo la configuraciÃ³n nativa de mÃ³dulos de crDroid 16.0
+      # Etapa de Inyección de NetHunter Core manteniendo la configuración nativa de módulos de crDroid 16.0
       # (CONFIG_MODVERSIONS=y y CONFIG_MODULE_SIG=y intactos para no romper la carga de controladores vendor .ko)
       - name: Inject NetHunter, Security & BadUSB Drivers into Native Defconfig
         run: |
@@ -89,7 +82,6 @@ jobs:
           
           # 0. KernelSU (Hooks VFS manuales sin Kprobes)
           echo "CONFIG_KSU=y" >> $DEFCONFIG
-          echo "CONFIG_KSU_MANUAL_HOOK=y" >> $DEFCONFIG
           echo "CONFIG_KSU_DEBUG=n" >> $DEFCONFIG
           
           # 1. Comunicacion IPC y aislamiento de Namespaces (NetHunter Chroot, Docker, Metasploit)
@@ -174,20 +166,20 @@ jobs:
           if [ -f "$BOOT_DIR/Image" ]; then
             echo "KERNEL_FILE_NAME=Image" >> $GITHUB_ENV
             echo "CHECK_IMAGE=true" >> $GITHUB_ENV
-            echo "âœ… Â¡Kernel raw Image detectado (crDroid 16.0 estÃ¡ndar)!"
+            echo "✅ ¡Kernel raw Image detectado (crDroid 16.0 estándar)!"
           elif [ -f "$BOOT_DIR/Image.gz" ]; then
             echo "KERNEL_FILE_NAME=Image.gz" >> $GITHUB_ENV
             echo "CHECK_IMAGE=true" >> $GITHUB_ENV
-            echo "âœ… Â¡Kernel Image.gz detectado!"
+            echo "✅ ¡Kernel Image.gz detectado!"
           else
-            echo "ðŸš¨ ERROR: No se encontrÃ³ ningÃºn binario Image vÃ¡lido en $BOOT_DIR"
+            echo "🚨 ERROR: No se encontró ningún binario Image válido en $BOOT_DIR"
             exit 1
           fi
 
       - name: Make AnyKernel3
         run: |
           if [ "$CHECK_IMAGE" != "true" ]; then
-            echo "Imagen del kernel no encontrada, saltando creaciÃ³n de AnyKernel3."
+            echo "Imagen del kernel no encontrada, saltando creación de AnyKernel3."
             exit 0
           fi
 
@@ -236,20 +228,15 @@ jobs:
           # Copiar el binario del kernel Image
           cp "android-kernel/out/arch/arm64/boot/$KERNEL_FILE_NAME" AnyKernel3/$KERNEL_FILE_NAME
 
-          # Copiar el archivo estÃ¡tico de configuraciÃ³n anykernel.sh del repositorio
+          # Copiar el archivo estático de configuración anykernel.sh del repositorio
           cp $GITHUB_WORKSPACE/.github/anykernel/anykernel.sh AnyKernel3/anykernel.sh
 
-          # Descargar ksud de KernelSU-Next v3.4.0-legacy (Non-GKI / manual VFS hooks)
-          # NOTA: v3.4.0-legacy y v3.4.0 comparten el mismo ksud binario del release v3.4.0
-          echo "[+] Descargando ksud de KernelSU-Next v3.4.0 (compatible con legacy Non-GKI)..."
-          curl -LSs --retry 5 --retry-delay 3 \
-            "https://github.com/KernelSU-Next/KernelSU-Next/releases/download/v3.4.0/ksud-aarch64-linux-android" \
-            -o AnyKernel3/tools/ksud
+          # Descargar binario oficial de ksud de KernelSU-Next para aarch64
+          echo "[+] Descargando binario oficial ksud de KernelSU-Next..."
+          curl -LSs "https://github.com/KernelSU-Next/KernelSU-Next/releases/download/v3.3.0/ksud-aarch64-linux-android" -o AnyKernel3/tools/ksud
           chmod 755 AnyKernel3/tools/ksud
-          ls -lh AnyKernel3/tools/ksud
-          file AnyKernel3/tools/ksud || true
 
-          echo "=== VERIFICACIÃ“N DE ESTRUCTURA ANYKERNEL3 ==="
+          echo "=== VERIFICACIÓN DE ESTRUCTURA ANYKERNEL3 ==="
           ls -la AnyKernel3/
           echo "============================================="
 
