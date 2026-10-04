@@ -6,14 +6,10 @@ Purpose: Inject the VFS call hooks required for KernelSU-Next's NON-GKI (legacy)
 
 KernelSU-Next v3.4.0-legacy Architecture (Non-GKI):
   - Uses MANUAL VFS hooks (NOT kprobes/tracepoints)
-  - core_hook.c EXISTS and handles prctl supercall entry
+  - core_hook.c NO LONGER EXISTS
+  - supercall/supercall.c handles sys_reboot gateway (NOT prctl)
   - apk_sign.c is at drivers/kernelsu/apk_sign.c (flat structure)
-  - setup.sh tag: v3.4.0-legacy (NOT v3.4.0 which is GKI-only)
-
-KernelSU-Next v3.4.0 (GKI-only, for reference):
-  - Uses LSM hooks + syscall tracepoints
-  - core_hook.c does NOT exist
-  - supercall/dispatch.c handles prctl
+  - setup.sh tag: v3.4.0-legacy
 
 Author: r3n3o & Antigravity (Google DeepMind)
 """
@@ -178,85 +174,38 @@ extern int ksu_handle_stat(int *dfd, const char __user **filename_user, int *fla
         print("[~] fs/stat.c already patched, skipping")
 
     # =========================================================================
-    # 5. kernel/sys.c - prctl hook (Manager <-> Kernel supercall gateway)
-    #    KernelSU-Next v3.4.0: ksu_handle_prctl entry -> supercall/dispatch.c
+    # 5. kernel/reboot.c - sys_reboot hook (Manager <-> Kernel supercall gateway)
+    #    KernelSU-Next v3.4.0-legacy: sys_reboot entry -> supercall/supercall.c
     # =========================================================================
-    print("\n[*] Patching kernel/sys.c (prctl supercall hook)...")
-    with open("kernel/sys.c", "r", encoding="utf-8") as f:
-        sys_c = f.read()
+    print("\n[*] Patching kernel/reboot.c (sys_reboot supercall hook)...")
+    if os.path.exists("kernel/reboot.c"):
+        with open("kernel/reboot.c", "r", encoding="utf-8") as f:
+            reboot_c = f.read()
 
-    sys_decl = """
+        reboot_decl = """
 #ifdef CONFIG_KSU
-extern int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
-\t\t\t    unsigned long arg4, unsigned long arg5);
+extern int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd, void __user **arg);
 #endif
 """
-    sys_call = """
+        reboot_call = """
 #ifdef CONFIG_KSU
-\tksu_handle_prctl(option, arg2, arg3, arg4, arg5);
+\tksu_handle_sys_reboot(magic1, magic2, cmd, &arg);
 #endif
 """
-    if "ksu_handle_prctl" not in sys_c:
-        sys_c, n = re.subn(
-            r"(SYSCALL_DEFINE5\s*\(\s*prctl\s*,[^{]*\{)",
-            sys_decl + r"\n\1\n" + sys_call,
-            sys_c, count=1
-        )
-        assert n == 1, "Failed to patch SYSCALL_DEFINE5(prctl) in kernel/sys.c"
-        with open("kernel/sys.c", "w", encoding="utf-8") as f:
-            f.write(sys_c)
-        print("[+] Patched kernel/sys.c with KernelSU prctl hook")
-    else:
-        print("[~] kernel/sys.c already patched, skipping")
-
-    # =========================================================================
-    # 6. core_hook.c - SECCOMP atomic clear + Manager detection fix
-    #    In v3.4.0-LEGACY, core_hook.c EXISTS and handles the prctl entry.
-    #    Two critical fixes needed:
-    #    a) SECCOMP atomic clear: replace invalid flag access with safe API
-    #    b) Grant-root: ensure ksu_get_manager_uid() check is lenient enough
-    # =========================================================================
-    print("\n[*] Patching core_hook.c (SECCOMP clear + grant-root fix)...")
-    core_candidates = [
-        "drivers/kernelsu/core_hook.c",
-        "KernelSU-Next/kernel/core_hook.c",
-        "KernelSU/kernel/core_hook.c",
-    ]
-    core_path = next((p for p in core_candidates if os.path.exists(p)), None)
-    if core_path:
-        with open(core_path, "r", encoding="utf-8") as f:
-            core_c = f.read()
-
-        modified = False
-
-        # Fix a) SECCOMP atomic clear — replace raw flag manipulation with safe kernel API
-        # (current_thread_info()->flags &= ~TIF_SECCOMP is not atomic-safe on SMP)
-        bad_seccomp = "current_thread_info()->flags &= ~(TIF_SECCOMP | _TIF_SECCOMP);"
-        good_seccomp = "clear_tsk_thread_flag(current, TIF_SECCOMP);"
-        if bad_seccomp in core_c:
-            core_c = core_c.replace(bad_seccomp, good_seccomp)
-            modified = True
-            print(f"[+] Fixed SECCOMP atomic clear in {core_path}")
-
-        # Fix b) Broaden Manager detection: if UID >= 10000 auto-set as manager candidate
-        # This ensures the first prctl(0xdeadbeef) from the Manager app is accepted
-        manager_check_old = "if (ksu_get_manager_uid() == current_uid().val) {"
-        manager_check_new = (
-            "if (ksu_get_manager_uid() == current_uid().val || "
-            "(ksu_get_manager_uid() == (uid_t)-1 && current_uid().val >= 10000)) {"
-        )
-        if manager_check_old in core_c and manager_check_new not in core_c:
-            core_c = core_c.replace(manager_check_old, manager_check_new, 1)
-            modified = True
-            print(f"[+] Broadened Manager UID check in {core_path}")
-
-        if modified:
-            with open(core_path, "w", encoding="utf-8") as f:
-                f.write(core_c)
+        if "ksu_handle_sys_reboot" not in reboot_c:
+            reboot_c, n = re.subn(
+                r"(SYSCALL_DEFINE4\s*\(\s*reboot\s*,[^{]*\{)",
+                reboot_decl + r"\n\1\n" + reboot_call,
+                reboot_c, count=1
+            )
+            assert n == 1, "Failed to patch SYSCALL_DEFINE4(reboot) in kernel/reboot.c"
+            with open("kernel/reboot.c", "w", encoding="utf-8") as f:
+                f.write(reboot_c)
+            print("[+] Patched kernel/reboot.c with KernelSU sys_reboot hook")
         else:
-            print(f"[~] {core_path} already patched or patterns not found, skipping")
+            print("[~] kernel/reboot.c already patched, skipping")
     else:
-        print("[~] core_hook.c not found (expected in v3.4.0-legacy; check setup.sh ran correctly)")
+        print("[!] kernel/reboot.c not found")
 
     # =========================================================================
     # 7. apk_sign.c - Authorize KernelSU-Next Manager APK signature

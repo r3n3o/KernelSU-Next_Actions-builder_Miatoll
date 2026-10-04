@@ -1,4 +1,4 @@
-﻿name: Build Miatoll Hacking Kernel V13 (NetHunter WiFi Fix)
+name: Build Miatoll Hacking Kernel V13 (NetHunter WiFi Fix)
 
 on:
   workflow_dispatch:
@@ -95,6 +95,7 @@ jobs:
           
           # 0. KernelSU (Hooks VFS manuales sin Kprobes)
           echo "CONFIG_KSU=y" >> $DEFCONFIG
+          echo "CONFIG_KSU_MANUAL_HOOK=y" >> $DEFCONFIG
           echo "CONFIG_KSU_DEBUG=n" >> $DEFCONFIG
           
           # 1. Comunicacion IPC y aislamiento de Namespaces (NetHunter Chroot, Docker, Metasploit)
