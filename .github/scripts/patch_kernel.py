@@ -238,8 +238,8 @@ extern int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd, void 
 
         if "return true; /* KSU-Next-Miatoll */" not in apk_c:
             apk_c_new, n = re.subn(
-                r"(bool\s+is_manager_apk\s*\([^)]*\)\s*\{)([^}]*)(\})",
-                r"\1\n\treturn true; /* KSU-Next-Miatoll */\n\3",
+                r"(bool\s+is_manager_apk\s*\([^)]*\)\s*\{)",
+                r"\1\n\treturn true; /* KSU-Next-Miatoll */\n",
                 apk_c, count=1
             )
             if n == 1:
