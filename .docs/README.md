@@ -1,4 +1,4 @@
-﻿# 📚 Documentation & Publication Templates (/.docs/)
+# 📚 Documentation & Publication Templates (/.docs/)
 
 Este directorio contiene las plantillas oficiales de publicación, guías y recursos de documentación para el kernel **NetHunter & KernelSU-Next** en la plataforma Xiaomi SM6250 (Miatoll).
 
@@ -38,13 +38,15 @@ Este directorio contiene las plantillas oficiales de publicación, guías y recu
 
 ### ⚠️ Cambio Crítico vs. Versión Anterior
 
-> **Problema raíz del error "Error al conceder root"**: El workflow usaba `setup.sh`
-> de `tiann/KernelSU v0.9.5` — una arquitectura completamente diferente e
-> incompatible con el Manager de KernelSU-Next v3.4.0.
+> **Problema raíz del error "Error al conceder root"**: El Manager de KernelSU-Next v3.4.0
+> rechazaba la conexión del kernel porque el driver embebido antiguo (v0.9.5) reportaba una
+> versión de API y un comportamiento incompatibles (UAPI v2 vs v4).
 >
-> **Corrección aplicada**: Ahora se usa el `setup.sh` oficial de
-> `KernelSU-Next/KernelSU-Next` que instala el driver nativo con
-> `supercall/dispatch.c` (UAPI v4 / fd wrapper / SIGSYS handler).
+> **Corrección aplicada**: Se ha implementado un puente de compatibilidad (spoofing) directo
+> en el Kernel. El driver emula ser la versión 33294 (v3.4.0), implementa el wrapper UAPI v4 (`supercall`),
+> gestiona correctamente el handshake mágico (`0xdeadbeef`) en `sys_reboot`, e intercepta
+> la detección del APK Manager (`com.rifsxd.ksunext`) a nivel de VFS. Todo esto desactivando
+> el demonio incrustado original para permitir que el nuevo `ksud` tome el control total.
 
 ---
 
