@@ -193,15 +193,23 @@ extern int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd, void 
 #endif
 """
         if "ksu_handle_sys_reboot" not in reboot_c:
-            reboot_c, n = re.subn(
-                r"(SYSCALL_DEFINE4\s*\(\s*reboot\s*,[^{]*\{)",
-                reboot_decl + r"\n\1\n" + reboot_call,
+            # 1. Insert declaration before SYSCALL_DEFINE4(reboot...
+            reboot_c = re.sub(
+                r"(SYSCALL_DEFINE4\s*\(\s*reboot)",
+                reboot_decl + r"\n\1",
                 reboot_c, count=1
             )
-            assert n == 1, "Failed to patch SYSCALL_DEFINE4(reboot) in kernel/reboot.c"
-            with open("kernel/reboot.c", "w", encoding="utf-8") as f:
-                f.write(reboot_c)
-            print("[+] Patched kernel/reboot.c with KernelSU sys_reboot hook")
+            
+            # 2. Insert hook call AFTER local variable declarations (Linux 4.19 uses gnu89, no mixed decls)
+            target_comment = "/* We only trust the superuser with rebooting the system. */"
+            if target_comment in reboot_c:
+                reboot_c = reboot_c.replace(target_comment, reboot_call + "\t" + target_comment, 1)
+                with open("kernel/reboot.c", "w", encoding="utf-8") as f:
+                    f.write(reboot_c)
+                print("[+] Patched kernel/reboot.c with KernelSU sys_reboot hook")
+            else:
+                print("[!] Could not find target comment in kernel/reboot.c to insert hook safely!")
+                exit(1)
         else:
             print("[~] kernel/reboot.c already patched, skipping")
     else:
