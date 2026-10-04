@@ -67,15 +67,9 @@ jobs:
           curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s v3.4.0-legacy
           echo "[+] KernelSU-Next v3.4.0-legacy driver integrated (Non-GKI / manual VFS hooks)"
 
-          # Verify legacy structure is present (core_hook.c must exist)
-          echo "=== Verificando estructura Non-GKI legacy ==="
-          if [ -f "drivers/kernelsu/core_hook.c" ]; then
-            echo "[OK] core_hook.c encontrado - estructura Non-GKI correcta"
-          else
-            echo "[ERROR] core_hook.c NO encontrado - setup.sh incorrecto!"
-            ls drivers/kernelsu/ 2>/dev/null || ls KernelSU-Next/kernel/ 2>/dev/null || true
-            exit 1
-          fi
+          # Note: v3.4.0-legacy uses manual VFS hooks but has removed core_hook.c,
+          # now it uses supercall/supercall.c and hooks sys_reboot instead of prctl.
+          echo "=== Setup Completado ==="
 
       - name: Apply KernelSU-Next VFS Hooks and Version 33294 Compatibility
         run: |
