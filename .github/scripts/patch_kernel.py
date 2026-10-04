@@ -171,6 +171,29 @@ extern int ksu_handle_rename(struct dentry *old_dentry, struct dentry *new_dentr
         f.write(namei_c)
     print("[+] Successfully patched fs/namei.c with KernelSU rename hook")
 
+    # 7.5 kernel/reboot.c (sys_reboot hook for KernelSU-Next Supercall)
+    with open("kernel/reboot.c", "r", encoding="utf-8") as f:
+        reboot_c = f.read()
+
+    reboot_decl = """
+#ifdef CONFIG_KSU
+extern int ksu_handle_reboot(int magic1, int magic2, unsigned int cmd, void __user *arg);
+#endif
+"""
+    reboot_call = """
+#ifdef CONFIG_KSU
+	if (magic1 == (int)0xdeadbeef) {
+		ksu_handle_reboot(magic1, magic2, cmd, arg);
+		return 0;
+	}
+#endif
+"""
+    reboot_c, nr = re.subn(r"(SYSCALL_DEFINE4\s*\(\s*reboot\s*,[^{]*\{)", reboot_decl + r"\n\1\n" + reboot_call, reboot_c, count=1)
+    assert nr == 1, "Failed to patch SYSCALL_DEFINE4(reboot) in kernel/reboot.c"
+    with open("kernel/reboot.c", "w", encoding="utf-8") as f:
+        f.write(reboot_c)
+    print("[+] Successfully patched kernel/reboot.c for KernelSU-Next Supercall")
+
     # 8. core_hook.c (ARM64 SECCOMP atomic clear, UAPI v2 reporting, and manager registration)
     core_candidates = [
         "KernelSU/kernel/core_hook.c",
@@ -402,7 +425,7 @@ static long anon_ksu_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
         struct ksu_get_info_cmd info = {
             .version = 33294,
             .flags = KSU_GET_INFO_FLAG_MANAGER,
-            .features = 20,
+            .features = 10004,
             .uapi_version = 4
         };
         unsigned int size = _IOC_SIZE(cmd);
