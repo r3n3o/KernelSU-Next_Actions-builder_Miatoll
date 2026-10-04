@@ -406,35 +406,6 @@ extern int ksu_handle_rename(struct dentry *old_dentry, struct dentry *new_dentr
     else:
         print("[~] ksud_integration.c not found; anykernel.sh will provision /data/adb")
 
-    # =========================================================================
-    # 11. fs/devpts/inode.c - PTY hook for NHterm/Termux terminal emulators
-    # =========================================================================
-    print("\n[*] Patching fs/devpts/inode.c (PTY hook for terminal emulators)...")
-    devpts_path = "fs/devpts/inode.c"
-    if os.path.exists(devpts_path):
-        with open(devpts_path, "r", encoding="utf-8") as f:
-            devpts_c = f.read()
-
-        devpts_decl = """
-#ifdef CONFIG_KSU
-extern int ksu_handle_devpts(struct inode *inode);
-#endif
-"""
-        if "ksu_handle_devpts" not in devpts_c:
-            devpts_pattern = r"(struct\s+dentry\s*\*devpts_pty_new\s*\([^{]*\{[\s\S]*?d_add\s*\(\s*dentry\s*,\s*inode\s*\)\s*;)"
-            devpts_repl = devpts_decl + r"\n\1\n#ifdef CONFIG_KSU\n\t\tksu_handle_devpts(inode);\n#endif"
-            devpts_c, n = re.subn(devpts_pattern, devpts_repl, devpts_c, count=1)
-            if n == 1:
-                with open(devpts_path, "w", encoding="utf-8") as f:
-                    f.write(devpts_c)
-                print("[+] Patched fs/devpts/inode.c with KernelSU PTY hook")
-            else:
-                print("[!] Could not locate devpts_pty_new, skipping PTY hook")
-        else:
-            print("[~] fs/devpts/inode.c already patched, skipping")
-    else:
-        print("[!] fs/devpts/inode.c not found, skipping")
-
     print("\n" + "=" * 60)
     print("[*] All KernelSU-Next v3.4.0 VFS hooks applied!")
     print("    Kernel: SM6250 (Miatoll) / crDroid 16.0 / Linux 4.19")
