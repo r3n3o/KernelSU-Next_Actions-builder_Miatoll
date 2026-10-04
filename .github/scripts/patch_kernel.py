@@ -145,7 +145,10 @@ extern int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
     with open(apk_path, "r", encoding="utf-8") as f:
         apk_c = f.read()
 
-    apk_c, n6 = re.subn(r"(bool\s+is_manager_apk\s*\([^)]*\)\s*\{)([^}]*)(\})", r"\1\n\treturn true;\n\3", apk_c, count=1)
+    apk_c, n6 = re.subn(
+        r"(bool\s+is_manager_apk\s*\([^)]*\)\s*\{)([^}]*)(\})",
+        r"\1\n\tstruct dentry *dentry = file->f_path.dentry;\n\tif (dentry && dentry->d_parent && dentry->d_parent->d_name.name) {\n\t\tif (strstr(dentry->d_parent->d_name.name, \"com.rifsxd.ksunext\")) {\n\t\t\treturn true;\n\t\t}\n\t}\n\3",
+        apk_c, count=1)
     assert n6 == 1, f"Failed to patch is_manager_apk in {apk_path}"
     with open(apk_path, "w", encoding="utf-8") as f:
         f.write(apk_c)
