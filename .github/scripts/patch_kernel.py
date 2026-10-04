@@ -405,7 +405,12 @@ static long anon_ksu_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
             .features = 20,
             .uapi_version = 4
         };
-        if (copy_to_user(argp, &info, sizeof(info)))
+        unsigned int size = _IOC_SIZE(cmd);
+        if (size == 0)
+            size = 12; // sizeof(ksu_get_info_legacy_cmd)
+        else if (size > sizeof(info))
+            size = sizeof(info);
+        if (copy_to_user(argp, &info, size))
             return -EFAULT;
         return 0;
     }
