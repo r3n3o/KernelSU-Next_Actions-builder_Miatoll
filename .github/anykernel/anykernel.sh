@@ -39,15 +39,6 @@ no_vbmeta_partition_patch=1;
 ui_print " ";
 ui_print "  ╔═══════════════════════════════════════════════════════════╗";
 ui_print "  ║                                                           ║";
-ui_print "  ║                   . - ~ ~ ~ - .                           ║";
-ui_print "  ║               . '   /       \   ' .                       ║";
-ui_print "  ║             /      (  o   o  )      \                     ║";
-ui_print "  ║            :        \   ^   /        :                    ║";
-ui_print "  ║            :         ' --- '         :                    ║";
-ui_print "  ║             \                       /                     ║";
-ui_print "  ║               ' .                 '                       ║";
-ui_print "  ║                   ' - . _ . - '                           ║";
-ui_print "  ║                                                           ║";
 ui_print "  ║     ██████╗ ██████╗ ███╗   ██╗██████╗  ██████╗            ║";
 ui_print "  ║     ██╔══██╗╚════██╗████╗  ██║╚════██╗██╔═══██╗           ║";
 ui_print "  ║     ██████╔╝ █████╔╝██╔██╗ ██║ █████╔╝██║   ██║           ║";
@@ -56,12 +47,9 @@ ui_print "  ║     ██║  ██║██████╔╝██║ ╚█
 ui_print "  ║     ╚═╝  ╚═╝╚═════╝ ╚═╝  ╚═══╝╚═════╝  ╚═════╝            ║";
 ui_print "  ║                                                           ║";
 ui_print "  ║  ⚡ NETHUNTER & KERNELSU-NEXT HYBRID KERNEL ⚡            ║";
-ui_print "  ║  👽 Project   : Alien Miatoll Kernel Edition              ║";
 ui_print "  ║  📱 Device    : Xiaomi Redmi Note 9 Pro (joyeuse)         ║";
 ui_print "  ║  🛡️ Sec Stack : Kali NetHunter + BadUSB + KSU v3.4.0      ║";
 ui_print "  ║                                                           ║";
-ui_print "  ║  👑 Lead Developer : r3n3o                                ║";
-ui_print "  ║  🤖 Co-Developer   : Antigravity (Google DeepMind)        ║";
 ui_print "  ╚═══════════════════════════════════════════════════════════╝";
 ui_print " ";
 
