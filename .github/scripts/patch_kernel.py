@@ -256,7 +256,11 @@ extern int ksu_handle_reboot(int magic1, int magic2, unsigned int cmd, void __us
 \tif (false) {"""
         if mgr_target in core_c and "ksu_install_fd" not in core_c:
             core_c = core_c.replace(mgr_target, mgr_repl, 1)
-            
+
+        # Disable ksud injection so the real ksud binary is executed
+        if "ksu_inject_ksud(" in core_c:
+            core_c = core_c.replace("return ksu_inject_ksud(file_ptr, buf_ptr, count_ptr, pos);", "return 0; /* disabled ksud injection */")
+
         with open(core_path, "w", encoding="utf-8") as f:
             f.write(core_c)
         print(f"[+] Successfully patched {core_path} for SECCOMP clearing, UAPI v2 reporting, and manager registration")
@@ -419,6 +423,7 @@ static long anon_ksu_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
             escape_to_root();
             return 0;
         }
+        pr_err("KSU_IOCTL_GRANT_ROOT EPERM: uid=%d, is_manager=%d, ksu_manager_uid=%d\\n", current_uid().val, is_manager(), ksu_get_manager_uid());
         return -EPERM;
 
     case 2: { // KSU_IOCTL_GET_INFO
