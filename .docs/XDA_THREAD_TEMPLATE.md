@@ -57,12 +57,13 @@ All functions (KernelSU root, BadUSB HID, KeX Desktop, and packet injection) hav
 [SIZE=5][B]✨ Key Features & Technical Highlights[/B][/SIZE]
 
 [LIST]
-[*][B]⚡ KernelSU-Next v3.4.0 Core Engine (Build 33294):[/B] Native kernel-level root with manual Non-GKI syscall hooks ([FONT=Courier New]3.4.0:KernelSU[/FONT]). Completely invisible to userspace root detection; leaves the [FONT=Courier New]/system[/FONT] partition completely untouched.
-[*][B]📡 Full Wireless Packet Injection & Monitor Mode:[/B] Backported and enabled [FONT=Courier New]mac80211[/FONT] and [FONT=Courier New]cfg80211[/FONT] wireless stacks with Minstrel HT rate control. Ready out-of-the-box for external USB OTG wireless cards (Atheros AR9271 [FONT=Courier New]ath9k_htc[/FONT], Realtek RTL8187 / RTL8812AU / [FONT=Courier New]rtl8xxxu[/FONT], Ralink RT3070 [FONT=Courier New]rt2800usb[/FONT], MediaTek MT7601U).
+[*][B]⚡ KernelSU-Next v3.4.0 Core Engine (Build 33294):[/B] Native kernel-level root with custom Non-GKI UAPI v4 spoofing. Bypasses Android 16 SECCOMP restrictions via [FONT=Courier New]0xdeadbeef[/FONT] magic handshake and direct VFS interception for Manager APK detection.
+[*][B]📡 Full Wireless Packet Injection & Monitor Mode:[/B] Backported and enabled [FONT=Courier New]mac80211[/FONT] and [FONT=Courier New]cfg80211[/FONT] wireless stacks with Minstrel HT rate control. Ready out-of-the-box for external USB OTG wireless cards (Atheros AR9271, Realtek RTL8812AU, Ralink RT3070).
 [*][B]⌨️ BadUSB / USB HID Hardware Emulation:[/B] Native ConfigFS HID endpoints ([FONT=Courier New]/dev/hidg0[/FONT], [FONT=Courier New]/dev/hidg1[/FONT]) enabled for DuckHunter, BadUSB payload execution, and mouse/keyboard emulation.
-[*][B]📦 Advanced Linux Namespaces & Virtualization:[/B] Full support for [FONT=Courier New]CONFIG_USER_NS[/FONT], [FONT=Courier New]CONFIG_PID_NS[/FONT], [FONT=Courier New]CONFIG_NET_NS[/FONT], [FONT=Courier New]CONFIG_IPC_NS[/FONT], [FONT=Courier New]CONFIG_SYSVIPC[/FONT], and [FONT=Courier New]CONFIG_BLK_DEV_LOOP[/FONT] for flawless Kali NetHunter chroot and rootless containers.
-[*][B]📺 NetHunter KeX Desktop Ready:[/B] Pre-configured for headless XFCE4 graphical sessions over TigerVNC on port 5901 (Display [FONT=Courier New]:1[/FONT]).
-[*][B]🛠️ AnyKernel3 Universal Flashable ZIP:[/B] Dynamic UFS block discovery targeting [FONT=Courier New]/dev/block/bootdevice/by-name/boot[/FONT].
+[*][B]📦 Advanced Linux Namespaces & Virtualization:[/B] Full support for flawless Kali NetHunter chroot and rootless containers.
+[*][B]🛠️ Resolved NetHunter Kernel Panics:[/B] Completely fixed the legacy PTY null-pointer dereference bug (SELinux Context issue) ensuring 100% stability when launching NetHunter Terminal or Termux.
+[*][B]📺 NetHunter KeX Desktop Ready:[/B] Pre-configured for headless XFCE4 graphical sessions over TigerVNC on port 5901.
+[*][B]🛡️ AnyKernel3 Universal Flashable ZIP:[/B] Silent, bloat-free installer with a perfectly symmetrical CLI UI and dynamic UFS block discovery.
 [/LIST]
 
 ---
@@ -264,6 +265,8 @@ fastboot reboot
 [*][B]rifsxd & tiann:[/B] KernelSU-Next & KernelSU architecture.
 [*][B]Offensive Security Team:[/B] Kali NetHunter project.
 [*][B]osm0sis:[/B] AnyKernel3 packaging engine.
+[*][B]René Ortez:[/B] Lead Developer & Maintainer.
+[*][B]Antigravity (Google DeepMind):[/B] Co-Developer (Architecture & Kernel Hooking).
 [*][B]Miatoll Community:[/B] Continuous testing and development.
 [/LIST]
 
