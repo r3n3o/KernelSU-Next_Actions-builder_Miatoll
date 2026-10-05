@@ -45,7 +45,7 @@ ui_print "  Target OS : crDroid 16.0 (Android 16)                ";
 ui_print "  Target HW : Xiaomi Redmi Note 9 Pro (joyeuse)        ";
 ui_print "  Sec Stack : Kali NetHunter + KernelSU-Next v3.4.0    ";
 ui_print "                                                       ";
-ui_print "  Lead Dev  : r3n3o                                    ";
+ui_print "  Lead Dev  : Rene Ortez                               ";
 ui_print "  Co-Dev    : Antigravity (Google DeepMind)            ";
 ui_print "=======================================================";
 

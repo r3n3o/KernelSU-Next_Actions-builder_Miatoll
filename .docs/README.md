@@ -52,5 +52,5 @@ Este directorio contiene las plantillas oficiales de publicación, guías y recu
 
 ## ✍️ Créditos
 
-* **Lead Developer**: r3n3o
+* **Lead Developer**: René Ortez
 * **Co-Developer**: Antigravity (Google DeepMind)
