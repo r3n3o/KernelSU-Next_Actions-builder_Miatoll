@@ -33,21 +33,21 @@ patch_vbmeta_flag=0;
 NO_VBMETA_PARTITION_PATCH=1;
 no_vbmeta_partition_patch=1;
 
+NO_UI=1;
+
 # import functions/variables and setup patching (DO NOT REMOVE)
 . tools/ak3-core.sh;
 
-ui_print " ";
-ui_print "  =======================================================";
-ui_print "                                                         ";
-ui_print "    ⚡ NETHUNTER & KERNELSU-NEXT HYBRID KERNEL ⚡      ";
-ui_print "    👽 Project   : Alien Miatoll Kernel Edition        ";
-ui_print "    📱 Device    : Xiaomi Redmi Note 9 Pro (joyeuse)   ";
-ui_print "    🛡️ Sec Stack : Kali NetHunter + KSU v3.4.0         ";
-ui_print "                                                         ";
-ui_print "    👑 Lead Developer : r3n3o                          ";
-ui_print "    🤖 Co-Developer   : Antigravity (Google DeepMind)  ";
-ui_print "  =======================================================";
-ui_print " ";
+ui_print "=======================================================";
+ui_print "           NETHUNTER & KERNELSU-NEXT KERNEL            ";
+ui_print "=======================================================";
+ui_print "  Target OS : crDroid 16.0 (Android 16)                ";
+ui_print "  Target HW : Xiaomi Redmi Note 9 Pro (joyeuse)        ";
+ui_print "  Sec Stack : Kali NetHunter + KernelSU-Next v3.4.0    ";
+ui_print "                                                       ";
+ui_print "  Lead Dev  : r3n3o                                    ";
+ui_print "  Co-Dev    : Antigravity (Google DeepMind)            ";
+ui_print "=======================================================";
 
 # boot install (preserve original crDroid 16.0 ramdisk bit-for-bit without unpack/repack corruption)
 split_boot;
